@@ -55,49 +55,9 @@ class LoggerApp:
         except Exception as e:
             print(f"Error creating recording inlet: {e}")
             self.inlet = None
-
-    def auto_start_recording(self):
-        """Automatically start recording on app launch"""
-        if not self.inlet:
-            print("Cannot auto-start recording: no inlet available")
-            return
-        
-        try:
-            # Create default filename with timestamp
-            current_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            default_filename = f"{current_timestamp}_log.xdf"
-            
-            # Ensure the default directory exists
-            _default_xdf_folder.mkdir(parents=True, exist_ok=True)
-            
-            # Set filename directly without dialog
-            self.xdf_filename = str(_default_xdf_folder / default_filename)
-            
-            self.recording = True
-            self.recorded_data = []
-            self.recording_start_time = pylsl.local_clock()
-            
-            # Create backup file for crash recovery
-            self.backup_filename = str(Path(self.xdf_filename).with_suffix('.backup.json'))
-            
-            # Update GUI
-            self.recording_status_label.config(text="Recording...", foreground="green")
-            self.start_recording_button.config(state="disabled")
-            self.stop_recording_button.config(state="normal")
-            self.status_info_label.config(text=f"Auto-recording to: {os.path.basename(self.xdf_filename)}")
-            
-            # Start recording thread
-            self.recording_thread = threading.Thread(target=self.recording_worker, daemon=True)
-            self.recording_thread.start()
-            
-            self.update_log_display("XDF Recording auto-started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            print(f"Auto-started recording to: {self.xdf_filename}")
-            
-        except Exception as e:
-            print(f"Error auto-starting recording: {e}")
-            self.update_log_display(f"Auto-start failed: {str(e)}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-
+    # ---------------------------------------------------------------------------- #
+    #                               Recording Methods                              #
+    # ---------------------------------------------------------------------------- #
 
     def setup_lsl_outlet(self):
         """Create an LSL outlet for sending messages"""
@@ -126,6 +86,7 @@ class LoggerApp:
         except Exception as e:
             self.lsl_status_label.config(text=f"LSL Status: Error - {str(e)}", foreground="red")
             self.outlet = None
+    
     
     def setup_gui(self):
         """Create the GUI elements"""
@@ -242,6 +203,7 @@ class LoggerApp:
         self.recording_status_label.config(text="Recording...", foreground="green")
         self.start_recording_button.config(state="disabled")
         self.stop_recording_button.config(state="normal")
+        self.split_recording_button.config(state="normal")  # Enable split button
         self.status_info_label.config(text=f"Recording to: {os.path.basename(filename)}")
         
         # Start recording thread
@@ -249,6 +211,49 @@ class LoggerApp:
         self.recording_thread.start()
         
         self.update_log_display("XDF Recording started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    def auto_start_recording(self):
+        """Automatically start recording on app launch if inlet is available"""
+        if not self.inlet:
+            print("Cannot auto-start recording: no inlet available")
+            return
+        
+        try:
+            # Create default filename with timestamp
+            current_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_filename = f"{current_timestamp}_log.xdf"
+            
+            # Ensure the default directory exists
+            _default_xdf_folder.mkdir(parents=True, exist_ok=True)
+            
+            # Set filename directly without dialog
+            self.xdf_filename = str(_default_xdf_folder / default_filename)
+            
+            self.recording = True
+            self.recorded_data = []
+            self.recording_start_time = pylsl.local_clock()
+            
+            # Create backup file for crash recovery
+            self.backup_filename = str(Path(self.xdf_filename).with_suffix('.backup.json'))
+            
+            # Update GUI
+            self.recording_status_label.config(text="Recording...", foreground="green")
+            self.start_recording_button.config(state="disabled")
+            self.stop_recording_button.config(state="normal")
+            self.split_recording_button.config(state="normal")  # Enable split button
+            self.status_info_label.config(text=f"Auto-recording to: {os.path.basename(self.xdf_filename)}")
+            
+            # Start recording thread
+            self.recording_thread = threading.Thread(target=self.recording_worker, daemon=True)
+            self.recording_thread.start()
+            
+            self.update_log_display("XDF Recording auto-started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            print(f"Auto-started recording to: {self.xdf_filename}")
+            
+        except Exception as e:
+            print(f"Error auto-starting recording: {e}")
+            self.update_log_display(f"Auto-start failed: {str(e)}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
 
     def recording_worker(self):
         """Background thread for recording LSL data with incremental backup"""
@@ -298,6 +303,7 @@ class LoggerApp:
         self.recording_status_label.config(text="Not Recording", foreground="red")
         self.start_recording_button.config(state="normal")
         self.stop_recording_button.config(state="disabled")
+        self.split_recording_button.config(state="disabled")  # Disable split button
         self.status_info_label.config(text="Ready")
         
         self.update_log_display("XDF Recording stopped and saved", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
