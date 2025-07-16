@@ -1,0 +1,10 @@
+[project]
+name = "phologtolabstreaminglayer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9.13"
+dependencies = [
+    "matplotlib>=3.9.4",
+    "pylsl>=1.17.6",
+]
