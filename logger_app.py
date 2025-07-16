@@ -37,6 +37,67 @@ class LoggerApp:
         # Then create LSL outlet
         self.setup_lsl_outlet()
 
+    def setup_recording_inlet(self):
+        """Setup inlet to record our own stream"""
+        try:
+            # Look for our own stream
+            streams = pylsl.resolve_byprop('name', 'TextLogger', timeout=2.0)
+            if streams:
+                self.inlet = pylsl.StreamInlet(streams[0])
+                print("Recording inlet created successfully")
+                
+                # Auto-start recording after inlet is ready
+                self.root.after(500, self.auto_start_recording)
+                
+            else:
+                print("Could not find TextLogger stream for recording")
+                self.inlet = None
+        except Exception as e:
+            print(f"Error creating recording inlet: {e}")
+            self.inlet = None
+
+    def auto_start_recording(self):
+        """Automatically start recording on app launch"""
+        if not self.inlet:
+            print("Cannot auto-start recording: no inlet available")
+            return
+        
+        try:
+            # Create default filename with timestamp
+            current_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_filename = f"{current_timestamp}_log.xdf"
+            
+            # Ensure the default directory exists
+            _default_xdf_folder.mkdir(parents=True, exist_ok=True)
+            
+            # Set filename directly without dialog
+            self.xdf_filename = str(_default_xdf_folder / default_filename)
+            
+            self.recording = True
+            self.recorded_data = []
+            self.recording_start_time = pylsl.local_clock()
+            
+            # Create backup file for crash recovery
+            self.backup_filename = str(Path(self.xdf_filename).with_suffix('.backup.json'))
+            
+            # Update GUI
+            self.recording_status_label.config(text="Recording...", foreground="green")
+            self.start_recording_button.config(state="disabled")
+            self.stop_recording_button.config(state="normal")
+            self.status_info_label.config(text=f"Auto-recording to: {os.path.basename(self.xdf_filename)}")
+            
+            # Start recording thread
+            self.recording_thread = threading.Thread(target=self.recording_worker, daemon=True)
+            self.recording_thread.start()
+            
+            self.update_log_display("XDF Recording auto-started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            print(f"Auto-started recording to: {self.xdf_filename}")
+            
+        except Exception as e:
+            print(f"Error auto-starting recording: {e}")
+            self.update_log_display(f"Auto-start failed: {str(e)}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+
 
     def setup_lsl_outlet(self):
         """Create an LSL outlet for sending messages"""
@@ -65,21 +126,6 @@ class LoggerApp:
         except Exception as e:
             self.lsl_status_label.config(text=f"LSL Status: Error - {str(e)}", foreground="red")
             self.outlet = None
-    
-    def setup_recording_inlet(self):
-        """Setup inlet to record our own stream"""
-        try:
-            # Look for our own stream
-            streams = pylsl.resolve_byprop('name', 'TextLogger', timeout=2.0)
-            if streams:
-                self.inlet = pylsl.StreamInlet(streams[0])
-                print("Recording inlet created successfully")
-            else:
-                print("Could not find TextLogger stream for recording")
-                self.inlet = None
-        except Exception as e:
-            print(f"Error creating recording inlet: {e}")
-            self.inlet = None
     
     def setup_gui(self):
         """Create the GUI elements"""
@@ -113,6 +159,11 @@ class LoggerApp:
         self.stop_recording_button = ttk.Button(recording_frame, text="Stop Recording", command=self.stop_recording, state="disabled")
         self.stop_recording_button.grid(row=0, column=2, padx=5)
         
+        # Add Split Recording button
+        self.split_recording_button = ttk.Button(recording_frame, text="Split Recording", command=self.split_recording, state="disabled")
+        self.split_recording_button.grid(row=0, column=3, padx=5)
+        
+
         # Text input label and entry frame
         input_frame = ttk.Frame(main_frame)
         input_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
@@ -152,7 +203,9 @@ class LoggerApp:
         self.text_entry.focus()
     
 
-    # Recording Methods
+    # ---------------------------------------------------------------------------- #
+    #                               Recording Methods                              #
+    # ---------------------------------------------------------------------------- #
     def start_recording(self):
         """Start XDF recording"""
         if not self.inlet:
@@ -220,21 +273,6 @@ class LoggerApp:
                 print(f"Error in recording worker: {e}")
                 break
 
-    def save_backup(self):
-        """Save current data to backup file"""
-        try:
-            backup_data = {
-                'recorded_data': self.recorded_data,
-                'recording_start_time': self.recording_start_time,
-                'sample_count': len(self.recorded_data)
-            }
-            
-            with open(self.backup_filename, 'w') as f:
-                json.dump(backup_data, f, default=str)
-                
-        except Exception as e:
-            print(f"Error saving backup: {e}")
-
     def stop_recording(self):
         """Stop XDF recording and save file"""
         if not self.recording:
@@ -263,6 +301,84 @@ class LoggerApp:
         self.status_info_label.config(text="Ready")
         
         self.update_log_display("XDF Recording stopped and saved", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    def split_recording(self):
+        """Split recording into a new file - stop current and start new"""
+        if not self.recording:
+            return
+        
+        try:
+            # Stop current recording (this will save the current data)
+            self.stop_recording()
+            
+            # Wait a moment for the stop to complete
+            self.root.after(100, self.start_new_split_recording)
+            
+        except Exception as e:
+            print(f"Error splitting recording: {e}")
+            self.update_log_display(f"Split recording failed: {str(e)}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    def start_new_split_recording(self):
+        """Start new recording after split"""
+        if not self.inlet:
+            print("Cannot split recording: no inlet available")
+            return
+        
+        try:
+            # Create new filename with timestamp
+            current_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            new_filename = f"{current_timestamp}_log.xdf"
+            
+            # Ensure the default directory exists
+            _default_xdf_folder.mkdir(parents=True, exist_ok=True)
+            
+            # Set new filename directly
+            self.xdf_filename = str(_default_xdf_folder / new_filename)
+            
+            self.recording = True
+            self.recorded_data = []
+            self.recording_start_time = pylsl.local_clock()
+            
+            # Create backup file for crash recovery
+            self.backup_filename = str(Path(self.xdf_filename).with_suffix('.backup.json'))
+            
+            # Update GUI
+            self.recording_status_label.config(text="Recording...", foreground="green")
+            self.start_recording_button.config(state="disabled")
+            self.stop_recording_button.config(state="normal")
+            self.split_recording_button.config(state="normal")
+            self.status_info_label.config(text=f"Split to: {os.path.basename(self.xdf_filename)}")
+            
+            # Start recording thread
+            self.recording_thread = threading.Thread(target=self.recording_worker, daemon=True)
+            self.recording_thread.start()
+            
+            self.update_log_display(f"Recording split to new file: {new_filename}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            print(f"Split recording to new file: {self.xdf_filename}")
+            
+        except Exception as e:
+            print(f"Error starting new split recording: {e}")
+            self.update_log_display(f"Split restart failed: {str(e)}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+
+    # ---------------------------------------------------------------------------- #
+    #                             Backups and Recovery                             #
+    # ---------------------------------------------------------------------------- #
+    def save_backup(self):
+        """Save current data to backup file"""
+        try:
+            backup_data = {
+                'recorded_data': self.recorded_data,
+                'recording_start_time': self.recording_start_time,
+                'sample_count': len(self.recorded_data)
+            }
+            
+            with open(self.backup_filename, 'w') as f:
+                json.dump(backup_data, f, default=str)
+                
+        except Exception as e:
+            print(f"Error saving backup: {e}")
+
 
     def check_for_recovery(self):
         """Check for backup files and offer recovery on startup"""
@@ -312,7 +428,9 @@ class LoggerApp:
         except Exception as e:
             messagebox.showerror("Recovery Error", f"Failed to recover from backup: {str(e)}")
 
-
+    # ---------------------------------------------------------------------------- #
+    #                              Save/Write Methods                              #
+    # ---------------------------------------------------------------------------- #
     def save_xdf_file(self):
         """Save recorded data using MNE"""
         if not self.recorded_data:
@@ -489,6 +607,8 @@ class LoggerApp:
             del self.inlet
         
         self.root.destroy()
+
+
 
 def main():
     root = tk.Tk()
