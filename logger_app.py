@@ -374,7 +374,7 @@ class LoggerApp:
             # Add metadata to the raw object
             raw.info['description'] = 'TextLogger LSL Stream Recording'
             raw.info['experimenter'] = 'PhoLogToLabStreamingLayer'
-            
+
             # Determine output filename and format
             if self.xdf_filename.endswith('.xdf'):
                 # Save as FIF (MNE's native format)
@@ -389,12 +389,23 @@ class LoggerApp:
                 file_type = "FIF"
             
             # Also save a CSV for easy reading
-            csv_filename = actual_filename.replace('.fif', '_events.csv')
-            self.save_events_csv(csv_filename, messages, timestamps)
+
+            
+            if isinstance(actual_filename, str):
+                actual_filename = Path(actual_filename).resolve()
+
+            _default_CSV_folder = actual_filename.parent.joinpath('CSV')
+            _default_CSV_folder.mkdir(parents=True, exist_ok=True)
+            print(f'_default_CSV_folder: "{_default_CSV_folder}"')
+
+            csv_filename: str = actual_filename.name.replace('.fif', '_events.csv')
+            csv_filepath: Path = _default_CSV_folder.joinpath(csv_filename).resolve()
+
+            self.save_events_csv(csv_filepath, messages, timestamps)
             
             messagebox.showinfo("Success", 
-                f"{file_type} file saved: {actual_filename}\n"
-                f"Events CSV saved: {csv_filename}\n"
+                f"{file_type} file saved: '{actual_filename}'\n"
+                f"Events CSV saved: '{csv_filepath}'\n"
                 f"Recorded {len(self.recorded_data)} samples")
             
         except Exception as e:
