@@ -87,7 +87,7 @@ class LoggerApp:
             self.lsl_status_label.config(text=f"LSL Status: Error - {str(e)}", foreground="red")
             self.outlet = None
     
-    
+
     def setup_gui(self):
         """Create the GUI elements"""
         # Main frame
@@ -250,6 +250,12 @@ class LoggerApp:
             self.update_log_display("XDF Recording auto-started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             print(f"Auto-started recording to: {self.xdf_filename}")
             
+            # Log the auto-start event both in GUI and via LSL
+            auto_start_message = f"RECORDING_AUTO_STARTED: {default_filename}"
+            self.send_lsl_message(auto_start_message)  # Send via LSL
+            self.update_log_display("XDF Recording auto-started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            print(f"Auto-started recording to: {self.xdf_filename}")
+
         except Exception as e:
             print(f"Error auto-starting recording: {e}")
             self.update_log_display(f"Auto-start failed: {str(e)}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -284,11 +290,16 @@ class LoggerApp:
             return
         
         self.recording = False
-        
+
+        # Log the stop event via LSL before saving
+        stop_message = f"RECORDING_STOPPED: {os.path.basename(self.xdf_filename)}"
+        self.send_lsl_message(stop_message)
+   
         # Wait for recording thread to finish
         if self.recording_thread and self.recording_thread.is_alive():
             self.recording_thread.join(timeout=2.0)
         
+
         # Save XDF file
         self.save_xdf_file()
         
@@ -308,6 +319,7 @@ class LoggerApp:
         
         self.update_log_display("XDF Recording stopped and saved", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
+
     def split_recording(self):
         """Split recording into a new file - stop current and start new"""
         if not self.recording:
@@ -323,6 +335,7 @@ class LoggerApp:
         except Exception as e:
             print(f"Error splitting recording: {e}")
             self.update_log_display(f"Split recording failed: {str(e)}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
 
     def start_new_split_recording(self):
         """Start new recording after split"""
@@ -359,6 +372,12 @@ class LoggerApp:
             self.recording_thread = threading.Thread(target=self.recording_worker, daemon=True)
             self.recording_thread.start()
             
+            self.update_log_display(f"Recording split to new file: {new_filename}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            print(f"Split recording to new file: {self.xdf_filename}")
+            
+            # Log the split event both in GUI and via LSL
+            split_message = f"RECORDING_SPLIT_NEW_FILE: {new_filename}"
+            self.send_lsl_message(split_message)  # Send via LSL
             self.update_log_display(f"Recording split to new file: {new_filename}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             print(f"Split recording to new file: {self.xdf_filename}")
             
@@ -527,10 +546,11 @@ class LoggerApp:
 
             self.save_events_csv(csv_filepath, messages, timestamps)
             
-            messagebox.showinfo("Success", 
-                f"{file_type} file saved: '{actual_filename}'\n"
+            _status_str: str = (f"{file_type} file saved: '{actual_filename}'\n"
                 f"Events CSV saved: '{csv_filepath}'\n"
                 f"Recorded {len(self.recorded_data)} samples")
+            self.update_log_display(_status_str, timestamp=None)
+            # messagebox.showinfo("Success", _status_str)
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save file: {str(e)}")
@@ -590,8 +610,12 @@ class LoggerApp:
         else:
             print("LSL outlet not available")
     
-    def update_log_display(self, message, timestamp):
+    def update_log_display(self, message, timestamp=None):
         """Update the log display area"""
+        if timestamp is None:
+            ## get now as the timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
         log_entry = f"[{timestamp}] {message}\n"
         self.log_display.insert(tk.END, log_entry)
         self.log_display.see(tk.END)  # Auto-scroll to bottom
