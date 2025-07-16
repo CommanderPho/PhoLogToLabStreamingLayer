@@ -12,14 +12,14 @@ class LoggerApp:
         self.root.title("LSL Logger")
         self.root.geometry("500x400")
         
-        # Create LSL outlet
-        self.setup_lsl_outlet()
-        
         # Create log file
         self.log_file_path = "log_messages.txt"
         
-        # Create GUI elements
+        # Create GUI elements first
         self.setup_gui()
+        
+        # Then create LSL outlet
+        self.setup_lsl_outlet()
         
     def setup_lsl_outlet(self):
         """Create an LSL outlet for sending messages"""
@@ -36,10 +36,10 @@ class LoggerApp:
             
             # Create outlet
             self.outlet = pylsl.StreamOutlet(info)
-            self.lsl_status_label.config(text="LSL Status: Connected", fg="green")
+            self.lsl_status_label.config(text="LSL Status: Connected", foreground="green")
             
         except Exception as e:
-            self.lsl_status_label.config(text=f"LSL Status: Error - {str(e)}", fg="red")
+            self.lsl_status_label.config(text=f"LSL Status: Error - {str(e)}", foreground="red")
             self.outlet = None
     
     def setup_gui(self):
@@ -52,23 +52,27 @@ class LoggerApp:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(2, weight=1)
+        main_frame.rowconfigure(3, weight=1)
         
         # LSL Status label
         self.lsl_status_label = ttk.Label(main_frame, text="LSL Status: Initializing...", foreground="orange")
-        self.lsl_status_label.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.lsl_status_label.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
         
-        # Text input label
-        ttk.Label(main_frame, text="Message:").grid(row=1, column=0, sticky=tk.W, pady=(0, 5))
+        # Text input label and entry frame
+        input_frame = ttk.Frame(main_frame)
+        input_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        input_frame.columnconfigure(1, weight=1)
+        
+        ttk.Label(input_frame, text="Message:").grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
         
         # Text input box
-        self.text_entry = tk.Entry(main_frame, width=50)
-        self.text_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=(0, 5))
+        self.text_entry = tk.Entry(input_frame, width=50)
+        self.text_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 10))
         self.text_entry.bind('<Return>', lambda event: self.log_message())
         
         # Log button
-        self.log_button = ttk.Button(main_frame, text="Log", command=self.log_message)
-        self.log_button.grid(row=1, column=2, padx=(10, 0), pady=(0, 5))
+        self.log_button = ttk.Button(input_frame, text="Log", command=self.log_message)
+        self.log_button.grid(row=0, column=2)
         
         # Log display area
         ttk.Label(main_frame, text="Log History:").grid(row=2, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
@@ -77,12 +81,17 @@ class LoggerApp:
         self.log_display = scrolledtext.ScrolledText(main_frame, height=15, width=60)
         self.log_display.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
         
+        # Bottom frame for buttons and info
+        bottom_frame = ttk.Frame(main_frame)
+        bottom_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E))
+        bottom_frame.columnconfigure(1, weight=1)
+        
         # Clear log button
-        ttk.Button(main_frame, text="Clear Log Display", command=self.clear_log_display).grid(row=4, column=0, sticky=tk.W)
+        ttk.Button(bottom_frame, text="Clear Log Display", command=self.clear_log_display).grid(row=0, column=0, sticky=tk.W)
         
         # File info label
-        self.file_info_label = ttk.Label(main_frame, text=f"Log file: {self.log_file_path}")
-        self.file_info_label.grid(row=4, column=1, columnspan=2, sticky=tk.E)
+        self.file_info_label = ttk.Label(bottom_frame, text=f"Log file: {self.log_file_path}")
+        self.file_info_label.grid(row=0, column=2, sticky=tk.E)
         
         # Focus on text entry
         self.text_entry.focus()
@@ -120,6 +129,8 @@ class LoggerApp:
             except Exception as e:
                 print(f"Error sending LSL message: {e}")
                 messagebox.showerror("LSL Error", f"Failed to send LSL message: {str(e)}")
+        else:
+            print("LSL outlet not available")
     
     def write_to_file(self, message, timestamp):
         """Write message to log file"""
@@ -143,7 +154,7 @@ class LoggerApp:
     
     def on_closing(self):
         """Handle window closing"""
-        if self.outlet:
+        if hasattr(self, 'outlet') and self.outlet:
             del self.outlet
         self.root.destroy()
 
@@ -159,4 +170,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
