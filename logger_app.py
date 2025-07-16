@@ -7,20 +7,9 @@ import os
 import threading
 import time
 import numpy as np
-from pathlib import Path
-
-_default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
-
-
-import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox, filedialog
-import pylsl
-import pyxdf
-from datetime import datetime
-import os
-import threading
-import time
-import numpy as np
+import json
+import pickle
+import mne
 from pathlib import Path
 
 _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
@@ -42,9 +31,13 @@ class LoggerApp:
         # Create GUI elements first
         self.setup_gui()
         
+        # Check for recovery files
+        self.check_for_recovery()
+        
         # Then create LSL outlet
         self.setup_lsl_outlet()
-        
+
+
     def setup_lsl_outlet(self):
         """Create an LSL outlet for sending messages"""
         try:
@@ -158,6 +151,8 @@ class LoggerApp:
         # Focus on text entry
         self.text_entry.focus()
     
+
+    # Recording Methods
     def start_recording(self):
         """Start XDF recording"""
         if not self.inlet:
@@ -170,9 +165,6 @@ class LoggerApp:
         
         # Ensure the default directory exists
         _default_xdf_folder.mkdir(parents=True, exist_ok=True)
-        
-        # Create full default path
-        default_path = _default_xdf_folder / default_filename
         
         filename = filedialog.asksaveasfilename(
             initialdir=str(_default_xdf_folder),
@@ -190,6 +182,9 @@ class LoggerApp:
         self.recording_start_time = pylsl.local_clock()
         self.xdf_filename = filename
         
+        # Create backup file for crash recovery
+        self.backup_filename = str(Path(filename).with_suffix('.backup.json'))
+        
         # Update GUI
         self.recording_status_label.config(text="Recording...", foreground="green")
         self.start_recording_button.config(state="disabled")
@@ -201,7 +196,45 @@ class LoggerApp:
         self.recording_thread.start()
         
         self.update_log_display("XDF Recording started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    
+
+    def recording_worker(self):
+        """Background thread for recording LSL data with incremental backup"""
+        sample_count = 0
+        
+        while self.recording and self.inlet:
+            try:
+                sample, timestamp = self.inlet.pull_sample(timeout=1.0)
+                if sample:
+                    data_point = {
+                        'sample': sample,
+                        'timestamp': timestamp
+                    }
+                    self.recorded_data.append(data_point)
+                    sample_count += 1
+                    
+                    # Auto-save every 10 samples to backup file
+                    if sample_count % 10 == 0:
+                        self.save_backup()
+                        
+            except Exception as e:
+                print(f"Error in recording worker: {e}")
+                break
+
+    def save_backup(self):
+        """Save current data to backup file"""
+        try:
+            backup_data = {
+                'recorded_data': self.recorded_data,
+                'recording_start_time': self.recording_start_time,
+                'sample_count': len(self.recorded_data)
+            }
+            
+            with open(self.backup_filename, 'w') as f:
+                json.dump(backup_data, f, default=str)
+                
+        except Exception as e:
+            print(f"Error saving backup: {e}")
+
     def stop_recording(self):
         """Stop XDF recording and save file"""
         if not self.recording:
@@ -216,6 +249,13 @@ class LoggerApp:
         # Save XDF file
         self.save_xdf_file()
         
+        # Clean up backup file
+        try:
+            if hasattr(self, 'backup_filename') and os.path.exists(self.backup_filename):
+                os.remove(self.backup_filename)
+        except Exception as e:
+            print(f"Error removing backup file: {e}")
+        
         # Update GUI
         self.recording_status_label.config(text="Not Recording", foreground="red")
         self.start_recording_button.config(state="normal")
@@ -223,59 +263,165 @@ class LoggerApp:
         self.status_info_label.config(text="Ready")
         
         self.update_log_display("XDF Recording stopped and saved", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    
-    def recording_worker(self):
-        """Background thread for recording LSL data"""
-        while self.recording and self.inlet:
-            try:
-                sample, timestamp = self.inlet.pull_sample(timeout=1.0)
-                if sample:
-                    self.recorded_data.append({
-                        'sample': sample,
-                        'timestamp': timestamp
-                    })
-            except Exception as e:
-                print(f"Error in recording worker: {e}")
-                break
-    
+
+    def check_for_recovery(self):
+        """Check for backup files and offer recovery on startup"""
+        backup_files = list(_default_xdf_folder.glob('*.backup.json'))
+        
+        if backup_files:
+            response = messagebox.askyesno(
+                "Recovery Available", 
+                f"Found {len(backup_files)} backup file(s) from previous sessions. "
+                "Would you like to recover them?"
+            )
+            
+            if response:
+                for backup_file in backup_files:
+                    self.recover_from_backup(backup_file)
+
+    def recover_from_backup(self, backup_file):
+        """Recover data from backup file"""
+        try:
+            with open(backup_file, 'r') as f:
+                backup_data = json.load(f)
+            
+            # Ask user for recovery filename
+            original_name = backup_file.stem.replace('.backup', '')
+            recovery_filename = filedialog.asksaveasfilename(
+                initialdir=str(_default_xdf_folder),
+                initialfile=f"{original_name}_recovered.xdf",
+                defaultextension=".xdf",
+                filetypes=[("XDF files", "*.xdf"), ("All files", "*.*")],
+                title="Save Recovered XDF As"
+            )
+            
+            if recovery_filename:
+                # Restore data
+                self.recorded_data = backup_data['recorded_data']
+                self.xdf_filename = recovery_filename
+                
+                # Save as XDF
+                self.save_xdf_file()
+                
+                # Remove backup file
+                os.remove(backup_file)
+                
+                messagebox.showinfo("Recovery Complete", 
+                    f"Recovered {len(self.recorded_data)} samples to {recovery_filename}")
+                
+        except Exception as e:
+            messagebox.showerror("Recovery Error", f"Failed to recover from backup: {str(e)}")
+
+
     def save_xdf_file(self):
-        """Save recorded data to XDF file"""
+        """Save recorded data using MNE"""
         if not self.recorded_data:
             messagebox.showwarning("Warning", "No data to save")
             return
         
         try:
-            # Create XDF structure
-            stream_data = {
-                'time_series': [],
-                'time_stamps': [],
-                'info': {
-                    'name': ['TextLogger'],
-                    'type': ['Markers'],
-                    'channel_count': [1],
-                    'nominal_srate': [0],  # Irregular rate
-                    'channel_format': ['string'],
-                    'source_id': ['textlogger_001']
-                }
-            }
+            # Extract messages and timestamps
+            messages = []
+            timestamps = []
             
-            # Add recorded data
             for data_point in self.recorded_data:
-                stream_data['time_series'].append(data_point['sample'])
-                stream_data['time_stamps'].append(data_point['timestamp'])
+                message = data_point['sample'][0] if data_point['sample'] else ''
+                timestamp = data_point['timestamp']
+                messages.append(message)
+                timestamps.append(timestamp)
             
-            # Convert to numpy arrays
-            stream_data['time_series'] = np.array(stream_data['time_series'])
-            stream_data['time_stamps'] = np.array(stream_data['time_stamps'])
+            # Convert timestamps to relative times (from first sample)
+            if timestamps:
+                first_timestamp = timestamps[0]
+                relative_timestamps = [ts - first_timestamp for ts in timestamps]
+            else:
+                relative_timestamps = []
             
-            # Save XDF file
-            pyxdf.save_xdf(self.xdf_filename, [stream_data])
+            # Create annotations (MNE's way of handling markers/events)
+            # Set orig_time=None to avoid timing conflicts
+            annotations = mne.Annotations(
+                onset=relative_timestamps,
+                duration=[0.0] * len(relative_timestamps),  # Instantaneous events
+                description=messages,
+                orig_time=None  # This fixes the timing conflict
+            )
             
-            messagebox.showinfo("Success", f"XDF file saved: {self.xdf_filename}\nRecorded {len(self.recorded_data)} samples")
+            # Create a minimal info structure for the markers
+            info = mne.create_info(
+                ch_names=['TextLogger_Markers'],
+                sfreq=1000,  # Dummy sampling rate for the minimal channel
+                ch_types=['misc']
+            )
+            
+            # Create raw object with minimal dummy data
+            # We need at least some data points to create a valid Raw object
+            if len(timestamps) > 0:
+                # Create dummy data spanning the recording duration
+                duration = relative_timestamps[-1] if relative_timestamps else 1.0
+                n_samples = int(duration * 1000) + 1000  # Add buffer
+                dummy_data = np.zeros((1, n_samples))
+            else:
+                dummy_data = np.zeros((1, 1000))  # Minimum 1 second of data
+            
+            raw = mne.io.RawArray(dummy_data, info)
+            
+            # Set measurement date to match the first timestamp
+            if timestamps:
+                raw.set_meas_date(timestamps[0])
+            
+            raw.set_annotations(annotations)
+            
+            # Add metadata to the raw object
+            raw.info['description'] = 'TextLogger LSL Stream Recording'
+            raw.info['experimenter'] = 'PhoLogToLabStreamingLayer'
+            
+            # Determine output filename and format
+            if self.xdf_filename.endswith('.xdf'):
+                # Save as FIF (MNE's native format)
+                fif_filename = self.xdf_filename.replace('.xdf', '.fif')
+                raw.save(fif_filename, overwrite=True)
+                actual_filename = fif_filename
+                file_type = "FIF"
+            else:
+                # Use the original filename
+                raw.save(self.xdf_filename, overwrite=True)
+                actual_filename = self.xdf_filename
+                file_type = "FIF"
+            
+            # Also save a CSV for easy reading
+            csv_filename = actual_filename.replace('.fif', '_events.csv')
+            self.save_events_csv(csv_filename, messages, timestamps)
+            
+            messagebox.showinfo("Success", 
+                f"{file_type} file saved: {actual_filename}\n"
+                f"Events CSV saved: {csv_filename}\n"
+                f"Recorded {len(self.recorded_data)} samples")
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to save XDF file: {str(e)}")
-    
+            messagebox.showerror("Error", f"Failed to save file: {str(e)}")
+            print(f"Detailed error: {e}")
+            import traceback
+            traceback.print_exc()
+
+
+    def save_events_csv(self, csv_filename, messages, timestamps):
+        """Save events as CSV for easy reading"""
+        try:
+            import csv
+            
+            with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(['Timestamp', 'LSL_Time', 'Message'])
+                
+                for i, (message, lsl_time) in enumerate(zip(messages, timestamps)):
+                    # Convert LSL timestamp to readable datetime
+                    readable_time = datetime.fromtimestamp(lsl_time).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                    writer.writerow([readable_time, lsl_time, message])
+                    
+        except Exception as e:
+            print(f"Error saving CSV: {e}")
+
+
     def log_message(self):
         """Handle log button click"""
         message = self.text_entry.get().strip()
