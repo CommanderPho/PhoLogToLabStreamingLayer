@@ -1,10 +1,12 @@
 [project]
 name = "phologtolabstreaminglayer"
 version = "0.1.0"
-description = "a complete but minimal python app that runs on Windows that presents a text box and a "log" button. Upon pressing the "log" button it sends an labstreaminglayer message containing the text and also writes it to file"
+description = "a complete but minimal python app that allows the user to take timestampped notes to labstreaminglayer "
 readme = "README.md"
 requires-python = ">=3.9.13"
 dependencies = [
     "matplotlib>=3.9.4",
+    "pathlib>=1.0.1",
     "pylsl>=1.17.6",
+    "pyxdf>=1.17.0",
 ]
