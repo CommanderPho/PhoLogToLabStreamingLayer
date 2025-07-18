@@ -10,7 +10,7 @@ python logger_app.py
 ```
 
 ## Installing `liblsl` binaries
-
+https://labstreaminglayer.readthedocs.io/dev/lib_dev.html
 ```bash
 git clone https://github.com/CommanderPho/PhoLogToLabStreamingLayer.git
 cd PhoLogToLabStreamingLayer/
