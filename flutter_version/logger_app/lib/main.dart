@@ -46,6 +46,7 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
   String _recordingStatus = 'Not Recording';
   String _statusInfo = 'Ready';
   String? _currentRecordingFile;
+  String? _recordingDirectory;
 
   @override
   void initState() {
@@ -82,6 +83,10 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
       final defaultFolder = Directory('${documentsDir.path}/PhoLogToLabStreamingLayer_logs');
       await defaultFolder.create(recursive: true);
       
+      _recordingDirectory = Platform.isWindows 
+          ? defaultFolder.path.replaceAll('/', '\\')
+          : defaultFolder.path;
+      
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19);
       final filename = '${timestamp}_log.xdf';
       final filepath = '${defaultFolder.path}/$filename';
@@ -107,6 +112,10 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
       final documentsDir = await getApplicationDocumentsDirectory();
       final defaultFolder = Directory('${documentsDir.path}/PhoLogToLabStreamingLayer_logs');
       await defaultFolder.create(recursive: true);
+      
+      _recordingDirectory = Platform.isWindows 
+          ? defaultFolder.path.replaceAll('/', '\\')
+          : defaultFolder.path;
       
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19);
       final filename = '${timestamp}_log.xdf';
@@ -245,6 +254,42 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
     );
   }
 
+  Future<void> _openRecordingDirectory() async {
+    try {
+      String? directoryPath = _recordingDirectory;
+      
+      // If no directory set yet, use default
+      if (directoryPath == null) {
+        final documentsDir = await getApplicationDocumentsDirectory();
+        directoryPath = '${documentsDir.path}/PhoLogToLabStreamingLayer_logs';
+        await Directory(directoryPath).create(recursive: true);
+        _recordingDirectory = directoryPath;
+      }
+      
+      // Verify directory exists
+      if (!await Directory(directoryPath).exists()) {
+        await Directory(directoryPath).create(recursive: true);
+      }
+      
+      // Open directory based on platform
+      if (Platform.isWindows) {
+        // Use the properly formatted Windows path
+        await Process.run('explorer.exe', [directoryPath]);
+        _showSuccessSnackBar('Opened recording directory');
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [directoryPath]);
+        _showSuccessSnackBar('Opened recording directory');
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [directoryPath]);
+        _showSuccessSnackBar('Opened recording directory');
+      } else {
+        _showWarningSnackBar('Opening directories not supported on this platform');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Failed to open directory: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -257,15 +302,28 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // LSL Status
-            Container(
-              padding: const EdgeInsets.all(8.0),
-              decoration: BoxDecoration(
-                color: _lslStatus.contains('Error') ? Colors.red.shade100 : 
-                       _lslStatus == 'Connected' ? Colors.green.shade100 : Colors.orange.shade100,
-                borderRadius: BorderRadius.circular(4.0),
-              ),
-              child: Text('LSL Status: $_lslStatus'),
+            // LSL Status with folder button
+            Row(
+              children: [
+                IconButton(
+                  onPressed: _openRecordingDirectory,
+                  icon: const Icon(Icons.folder_open),
+                  tooltip: 'Open Recording Directory',
+                  iconSize: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(8.0),
+                    decoration: BoxDecoration(
+                      color: _lslStatus.contains('Error') ? Colors.red.shade100 : 
+                             _lslStatus == 'Connected' ? Colors.green.shade100 : Colors.orange.shade100,
+                      borderRadius: BorderRadius.circular(4.0),
+                    ),
+                    child: Text('LSL Status: $_lslStatus'),
+                  ),
+                ),
+              ],
             ),
             
             const SizedBox(height: 16),
