@@ -122,8 +122,9 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
       });
       
       _addLogEntry('XDF Recording started');
+      _showSuccessSnackBar('Recording started');
     } catch (e) {
-      _showErrorDialog('Failed to start recording: $e');
+      _showErrorSnackBar('Failed to start recording: $e');
     }
   }
 
@@ -142,10 +143,10 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
       
       _addLogEntry('XDF Recording stopped and saved');
       if (savedPath != null) {
-        _showInfoDialog('Recording saved to: $savedPath');
+        _showSuccessSnackBar('Recording saved successfully');
       }
     } catch (e) {
-      _showErrorDialog('Failed to stop recording: $e');
+      _showErrorSnackBar('Failed to stop recording: $e');
     }
   }
 
@@ -170,7 +171,7 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
       await _lslService.sendMessage(message);
       await _recordingService.recordMessage(message, DateTime.now());
     } catch (e) {
-      _showErrorDialog('Failed to send LSL message: $e');
+      _showErrorSnackBar('Failed to send LSL message: $e');
     }
   }
 
@@ -178,7 +179,7 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
     final message = _messageController.text.trim();
     
     if (message.isEmpty) {
-      _showWarningDialog('Please enter a message to log.');
+      _showWarningSnackBar('Please enter a message to log');
       return;
     }
     
@@ -206,50 +207,40 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
     });
   }
 
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Error'),
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
         content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
+        backgroundColor: Colors.red.shade600,
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+        ),
       ),
     );
   }
 
-  void _showWarningDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Warning'),
+  void _showWarningSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
         content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
+        backgroundColor: Colors.orange.shade600,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
-  void _showInfoDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Info'),
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
         content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
+        backgroundColor: Colors.green.shade600,
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
