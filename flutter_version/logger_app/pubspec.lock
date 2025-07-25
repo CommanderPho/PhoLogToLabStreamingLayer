@@ -65,14 +65,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.4"
-  file_picker:
-    dependency: "direct main"
-    description:
-      name: file_picker
-      sha256: "1bbf65dd997458a08b531042ec3794112a6c39c07c37ff22113d2e7e4f81d4e4"
-      url: "https://pub.dev"
-    source: hosted
-    version: "6.2.1"
   flutter:
     dependency: "direct main"
     description: flutter
@@ -86,21 +78,8 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.0"
-  flutter_plugin_android_lifecycle:
-    dependency: transitive
-    description:
-      name: flutter_plugin_android_lifecycle
-      sha256: f948e346c12f8d5480d2825e03de228d0eb8c3a737e4cdaa122267b89c022b5e
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.28"
   flutter_test:
     dependency: "direct dev"
-    description: flutter
-    source: sdk
-    version: "0.0.0"
-  flutter_web_plugins:
-    dependency: transitive
     description: flutter
     source: sdk
     version: "0.0.0"
@@ -301,14 +280,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "15.0.2"
-  win32:
-    dependency: transitive
-    description:
-      name: win32
-      sha256: "66814138c3562338d05613a6e368ed8cfb237ad6d64a9e9334be3f309acfca03"
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.14.0"
   xdg_directories:
     dependency: transitive
     description:

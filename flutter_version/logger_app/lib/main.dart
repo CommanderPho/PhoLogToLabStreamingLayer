@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
@@ -99,25 +98,24 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
 
   Future<void> _startRecording() async {
     try {
-      String? filePath = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save XDF Recording As',
-        fileName: '${DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19)}_log.json',
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-      );
+      final documentsDir = await getApplicationDocumentsDirectory();
+      final defaultFolder = Directory('${documentsDir.path}/PhoLogToLabStreamingLayer_logs');
+      await defaultFolder.create(recursive: true);
       
-      if (filePath != null) {
-        await _recordingService.startRecording(filePath);
-        
-        setState(() {
-          _isRecording = true;
-          _recordingStatus = 'Recording...';
-          _currentRecordingFile = filePath.split('/').last;
-          _statusInfo = 'Recording to: ${filePath.split('/').last}';
-        });
-        
-        _addLogEntry('XDF Recording started');
-      }
+      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19);
+      final filename = '${timestamp}_log.json';
+      final filePath = '${defaultFolder.path}/$filename';
+      
+      await _recordingService.startRecording(filePath);
+      
+      setState(() {
+        _isRecording = true;
+        _recordingStatus = 'Recording...';
+        _currentRecordingFile = filename;
+        _statusInfo = 'Recording to: $filename';
+      });
+      
+      _addLogEntry('XDF Recording started');
     } catch (e) {
       _showErrorDialog('Failed to start recording: $e');
     }
