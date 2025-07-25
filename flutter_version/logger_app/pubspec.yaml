@@ -36,6 +36,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   path_provider: ^2.1.1
   ffi: ^2.1.0
+  
+  # Local package for XDF file operations
+  xdf_files:
+    path: ../xdf_files
 
 dev_dependencies:
   flutter_test:
