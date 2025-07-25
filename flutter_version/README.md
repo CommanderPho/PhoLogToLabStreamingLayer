@@ -5,10 +5,12 @@ This is a Flutter implementation of the Python LSL Logger application. It provid
 ## Features
 
 - **LSL Integration**: Send text messages over Lab Streaming Layer
-- **XDF Recording**: Record LSL streams to files (JSON format with CSV export)
+- **XDF Recording**: Record LSL streams to native XDF binary format
+- **Async File Writing**: Debounced writing with 3-second delay for data safety
 - **Auto-start Recording**: Automatically begins recording when the app starts
 - **Split Recording**: Split recordings into new files without losing data
 - **Recovery Support**: Backup files for crash recovery
+- **CSV Export**: Real-time CSV export alongside XDF for easy analysis
 - **Cross-platform**: Runs on Windows, macOS, Linux, iOS, and Android
 
 ## Architecture
@@ -29,10 +31,11 @@ The Flutter app is structured with the following components:
    - Platform channels for iOS/Android
    - Custom LSL Dart package
 
-2. **File Format**: Saves recordings as JSON instead of XDF format:
-   - Contains same metadata and timing information
-   - Exports CSV files for easy data analysis
-   - Maintains compatibility with original data structure
+2. **File Format**: Saves recordings in native XDF binary format:
+   - Full compatibility with Lab Streaming Layer ecosystem
+   - Proper XDF chunk structure with headers, samples, and footers
+   - Real-time CSV export for easy data analysis
+   - Async writing with debouncing for data safety
 
 3. **UI Framework**: Flutter Material Design instead of tkinter:
    - Responsive design for mobile and desktop
@@ -55,7 +58,6 @@ The Flutter app is structured with the following components:
 ## Dependencies
 
 - `path_provider`: For accessing device directories
-- `file_picker`: For file save dialogs
 - `ffi`: For future native LSL library integration
 
 ## Usage
@@ -64,7 +66,8 @@ The Flutter app is structured with the following components:
 2. **Auto Recording**: Recording starts automatically in the default directory
 3. **Send Messages**: Type messages and click "Log" or press Enter
 4. **Manual Recording Control**: Start/stop/split recordings as needed
-5. **File Output**: Recordings saved as JSON with accompanying CSV files
+5. **File Output**: Recordings saved as XDF binary files with real-time CSV export
+6. **Data Safety**: Files written asynchronously 3 seconds after messages for crash protection
 
 ## Future Enhancements
 
