@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
 import 'log_entry.dart';
+import 'xdf_writer.dart';
 
 class RecordingService {
   bool _isRecording = false;
@@ -75,28 +76,18 @@ class RecordingService {
     }
     
     try {
-      final file = File(_currentFilePath!);
-      await file.parent.create(recursive: true);
+      await Directory(_currentFilePath!).parent.create(recursive: true);
       
-      // Create recording metadata
-      final recordingData = {
-        'metadata': {
-          'stream_name': 'TextLogger',
-          'stream_type': 'Markers',
-          'channel_count': 1,
-          'source_id': 'textlogger_001',
-          'manufacturer': 'PhoLogToLabStreamingLayer',
-          'version': '1.0',
-          'recording_start_time': _recordingStartTime?.toIso8601String(),
-          'recording_end_time': DateTime.now().toIso8601String(),
-          'sample_count': _recordedData.length,
-        },
-        'data': _recordedData,
-      };
+      // Determine file format based on extension
+      final isXdfFormat = _currentFilePath!.toLowerCase().endsWith('.xdf');
       
-      // Save as JSON (XDF equivalent)
-      final jsonString = const JsonEncoder.withIndent('  ').convert(recordingData);
-      await file.writeAsString(jsonString);
+      if (isXdfFormat) {
+        // Save as XDF binary format
+        await _saveAsXDF();
+      } else {
+        // Save as JSON format (fallback)
+        await _saveAsJSON();
+      }
       
       // Also save as CSV for easy reading
       await _saveEventsCSV();
@@ -108,11 +99,65 @@ class RecordingService {
     }
   }
 
+  Future<void> _saveAsXDF() async {
+    final streamInfo = {
+      'name': 'TextLogger',
+      'type': 'Markers',
+      'source_id': 'textlogger_001',
+      'manufacturer': 'PhoLogToLabStreamingLayer',
+      'hostname': 'flutter_app',
+      'uid': 'flutter-${DateTime.now().millisecondsSinceEpoch}',
+    };
+    
+    await XDFWriter.writeXDF(
+      filePath: _currentFilePath!,
+      recordedData: _recordedData,
+      streamInfo: streamInfo,
+    );
+    
+    print('XDF file saved: $_currentFilePath');
+  }
+
+  Future<void> _saveAsJSON() async {
+    final file = File(_currentFilePath!);
+    
+    // Create recording metadata
+    final recordingData = {
+      'metadata': {
+        'stream_name': 'TextLogger',
+        'stream_type': 'Markers',
+        'channel_count': 1,
+        'source_id': 'textlogger_001',
+        'manufacturer': 'PhoLogToLabStreamingLayer',
+        'version': '1.0',
+        'recording_start_time': _recordingStartTime?.toIso8601String(),
+        'recording_end_time': DateTime.now().toIso8601String(),
+        'sample_count': _recordedData.length,
+      },
+      'data': _recordedData,
+    };
+    
+    // Save as JSON
+    final jsonString = const JsonEncoder.withIndent('  ').convert(recordingData);
+    await file.writeAsString(jsonString);
+    
+    print('JSON file saved: $_currentFilePath');
+  }
+
   Future<void> _saveEventsCSV() async {
     if (_currentFilePath == null) return;
     
     try {
-      final csvPath = _currentFilePath!.replaceAll('.json', '_events.csv');
+      // Create CSV path by replacing extension
+      String csvPath = _currentFilePath!;
+      if (csvPath.toLowerCase().endsWith('.xdf')) {
+        csvPath = csvPath.substring(0, csvPath.length - 4) + '_events.csv';
+      } else if (csvPath.toLowerCase().endsWith('.json')) {
+        csvPath = csvPath.substring(0, csvPath.length - 5) + '_events.csv';
+      } else {
+        csvPath = '$csvPath.events.csv';
+      }
+      
       final csvFile = File(csvPath);
       
       final buffer = StringBuffer();

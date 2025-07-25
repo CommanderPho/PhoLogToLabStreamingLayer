@@ -77,7 +77,7 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
       await defaultFolder.create(recursive: true);
       
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19);
-      final filename = '${timestamp}_log.json';
+      final filename = '${timestamp}_log.xdf';
       final filepath = '${defaultFolder.path}/$filename';
       
       await _recordingService.startRecording(filepath);
@@ -103,7 +103,7 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
       await defaultFolder.create(recursive: true);
       
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19);
-      final filename = '${timestamp}_log.json';
+      final filename = '${timestamp}_log.xdf';
       final filePath = '${defaultFolder.path}/$filename';
       
       await _recordingService.startRecording(filePath);
