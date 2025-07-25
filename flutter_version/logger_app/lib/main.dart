@@ -36,6 +36,7 @@ class LoggerHomePage extends StatefulWidget {
 
 class _LoggerHomePageState extends State<LoggerHomePage> {
   final TextEditingController _messageController = TextEditingController();
+  final FocusNode _messageFocusNode = FocusNode();
   final LSLService _lslService = LSLService();
   final RecordingService _recordingService = RecordingService();
   final List<LogEntry> _logHistory = [];
@@ -50,6 +51,11 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
   void initState() {
     super.initState();
     _initializeServices();
+    
+    // Focus the message field when app starts
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _messageFocusNode.requestFocus();
+    });
   }
 
   Future<void> _initializeServices() async {
@@ -180,6 +186,9 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
     _addLogEntry(message);
     
     _messageController.clear();
+    
+    // Maintain focus on the text field
+    _messageFocusNode.requestFocus();
   }
 
   void _addLogEntry(String message) {
@@ -321,6 +330,7 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    focusNode: _messageFocusNode,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       hintText: 'Enter message to log',
@@ -388,6 +398,7 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
   @override
   void dispose() {
     _messageController.dispose();
+    _messageFocusNode.dispose();
     _lslService.dispose();
     _recordingService.dispose();
     super.dispose();
