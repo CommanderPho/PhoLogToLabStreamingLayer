@@ -1,4 +1,4 @@
-a complete but minimal python app that allows the user to take timestampped notes to labstreaminglayer 
+a complete but minimal python app that allows the user to take timestampped notes to labstreaminglayer and have them simultaneously saved out to file (.xdf/.csv)
 
 
 # Running
