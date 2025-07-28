@@ -1,3 +1,4 @@
 ﻿PhoLogToLabStreamingLayer.spec
 build
 dist
+flutter_version/xdf_files/*.xdf
