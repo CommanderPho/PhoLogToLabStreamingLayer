@@ -163,6 +163,8 @@ class LoggerApp:
             self.hotkey_popover.lift()
             self.quick_log_entry.focus()
             self.quick_log_entry.select_range(0, tk.END)
+            # Additional focus handling for existing popover
+            self.hotkey_popover.after(10, self.ensure_focus)
             return
         
         # Create popover window
@@ -178,6 +180,10 @@ class LoggerApp:
         
         # Remove window decorations for a cleaner look
         self.hotkey_popover.overrideredirect(True)
+        
+        # Force the popover to grab focus first
+        self.hotkey_popover.focus_force()
+        self.hotkey_popover.grab_set()  # Make it modal
         
         # Create content
         content_frame = ttk.Frame(self.hotkey_popover, padding="20")
@@ -212,8 +218,17 @@ class LoggerApp:
         self.quick_log_entry.focus()
         self.quick_log_entry.select_range(0, tk.END)
         
+        # Additional focus handling to ensure it works reliably
+        self.hotkey_popover.after(10, self.ensure_focus)
+        
         # Handle window close
         self.hotkey_popover.protocol("WM_DELETE_WINDOW", self.close_hotkey_popover)
+    
+    def ensure_focus(self):
+        """Ensure the text entry field has focus"""
+        if self.hotkey_popover and self.quick_log_entry:
+            self.quick_log_entry.focus_force()
+            self.quick_log_entry.select_range(0, tk.END)
     
     def center_popover_on_active_monitor(self):
         """Center the popover on the currently active monitor"""
