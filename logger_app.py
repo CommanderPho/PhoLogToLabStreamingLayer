@@ -11,6 +11,13 @@ import json
 import pickle
 import mne
 from pathlib import Path
+import pystray
+from PIL import Image, ImageDraw
+import keyboard
+import pyautogui
+import win32gui
+import win32con
+import win32api
 
 # _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
 _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
@@ -28,6 +35,11 @@ class LoggerApp:
         self.recorded_data = []
         self.recording_start_time = None
         
+        # System tray and hotkey state
+        self.system_tray = None
+        self.hotkey_popover = None
+        self.is_minimized = False
+        
         # Create GUI elements first
         self.setup_gui()
         
@@ -36,6 +48,10 @@ class LoggerApp:
         
         # Then create LSL outlet
         self.setup_lsl_outlet()
+        
+        # Setup system tray and global hotkey
+        self.setup_system_tray()
+        self.setup_global_hotkey()
 
     def setup_recording_inlet(self):
         """Setup inlet to record our own stream"""
@@ -87,6 +103,216 @@ class LoggerApp:
             self.lsl_status_label.config(text=f"LSL Status: Error - {str(e)}", foreground="red")
             self.outlet = None
     
+    def setup_system_tray(self):
+        """Setup system tray icon and menu"""
+        try:
+            # Create a simple icon (you can replace this with a custom icon file)
+            icon_image = self.create_tray_icon()
+            
+            # Create system tray menu
+            menu = pystray.Menu(
+                pystray.MenuItem("Show App", self.show_app),
+                pystray.MenuItem("Quick Log", self.show_hotkey_popover),
+                pystray.MenuItem("Exit", self.quit_app)
+            )
+            
+            # Create system tray icon
+            self.system_tray = pystray.Icon(
+                "logger_app",
+                icon_image,
+                "LSL Logger",
+                menu
+            )
+            
+            # Add double-click handler to show app
+            self.system_tray.on_activate = self.show_app
+            
+            # Start system tray in a separate thread
+            threading.Thread(target=self.system_tray.run, daemon=True).start()
+            
+        except Exception as e:
+            print(f"Error setting up system tray: {e}")
+    
+    def create_tray_icon(self):
+        """Create a simple icon for the system tray"""
+        # Create a 16x16 icon with a simple design
+        width = 16
+        height = 16
+        
+        # Create image with a dark background
+        image = Image.new('RGB', (width, height), color='#2c3e50')
+        draw = ImageDraw.Draw(image)
+        
+        # Draw a simple "L" shape in white
+        draw.rectangle([2, 2, 6, 14], fill='white')  # Vertical line
+        draw.rectangle([2, 10, 12, 14], fill='white')  # Horizontal line
+        
+        return image
+    
+    def setup_global_hotkey(self):
+        """Setup global hotkey for quick log entry"""
+        try:
+            # Register Ctrl+Alt+L as the global hotkey
+            keyboard.add_hotkey('ctrl+alt+l', self.show_hotkey_popover)
+            print("Global hotkey Ctrl+Alt+L registered successfully")
+        except Exception as e:
+            print(f"Error setting up global hotkey: {e}")
+    
+    def show_hotkey_popover(self):
+        """Show the hotkey popover for quick log entry"""
+        if self.hotkey_popover:
+            # If popover already exists, just focus it
+            self.hotkey_popover.focus_force()
+            self.hotkey_popover.lift()
+            return
+        
+        # Create popover window
+        self.hotkey_popover = tk.Toplevel()
+        self.hotkey_popover.title("Quick Log Entry")
+        self.hotkey_popover.geometry("400x150")
+        
+        # Center the popover on the active monitor
+        self.center_popover_on_active_monitor()
+        
+        # Make it always on top
+        self.hotkey_popover.attributes('-topmost', True)
+        
+        # Remove window decorations for a cleaner look
+        self.hotkey_popover.overrideredirect(True)
+        
+        # Create content
+        content_frame = ttk.Frame(self.hotkey_popover, padding="20")
+        content_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title label
+        title_label = ttk.Label(content_frame, text="Quick Log Entry", font=("Arial", 14, "bold"))
+        title_label.pack(pady=(0, 15))
+        
+        # Entry field
+        entry_frame = ttk.Frame(content_frame)
+        entry_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        entry_label = ttk.Label(entry_frame, text="Message:")
+        entry_label.pack(anchor=tk.W)
+        
+        self.quick_log_entry = tk.Entry(entry_frame, font=("Arial", 12))
+        self.quick_log_entry.pack(fill=tk.X, pady=(5, 0))
+        
+        # Buttons frame
+        button_frame = ttk.Frame(content_frame)
+        button_frame.pack(fill=tk.X)
+        
+        # Log button
+        log_btn = ttk.Button(button_frame, text="Log & Close", command=self.quick_log_and_close)
+        log_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        
+        # Cancel button
+        cancel_btn = ttk.Button(button_frame, text="Cancel", command=self.close_hotkey_popover)
+        cancel_btn.pack(side=tk.RIGHT)
+        
+        # Bind Enter key to log and close
+        self.quick_log_entry.bind('<Return>', lambda e: self.quick_log_and_close())
+        
+        # Bind Escape key to close
+        self.hotkey_popover.bind('<Escape>', lambda e: self.close_hotkey_popover())
+        
+        # Focus the entry field
+        self.quick_log_entry.focus()
+        
+        # Handle window close
+        self.hotkey_popover.protocol("WM_DELETE_WINDOW", self.close_hotkey_popover)
+    
+    def center_popover_on_active_monitor(self):
+        """Center the popover on the currently active monitor"""
+        try:
+            # Get the active window to determine which monitor it's on
+            active_window = win32gui.GetForegroundWindow()
+            if active_window:
+                # Get the monitor info for the active window
+                monitor_info = win32gui.MonitorFromWindow(active_window, win32con.MONITOR_DEFAULTTONEAREST)
+                
+                # Get monitor info
+                monitor_rect = win32gui.GetMonitorInfo(monitor_info)['Monitor']
+                
+                # Calculate center position
+                x = monitor_rect[0] + (monitor_rect[2] - monitor_rect[0]) // 2 - 200  # Half of popover width
+                y = monitor_rect[1] + (monitor_rect[3] - monitor_rect[1]) // 2 - 75   # Half of popover height
+                
+                self.hotkey_popover.geometry(f"+{x}+{y}")
+            else:
+                # Fallback to screen center
+                screen_width = self.hotkey_popover.winfo_screenwidth()
+                screen_height = self.hotkey_popover.winfo_screenheight()
+                x = (screen_width - 400) // 2
+                y = (screen_height - 150) // 2
+                self.hotkey_popover.geometry(f"+{x}+{y}")
+                
+        except Exception as e:
+            print(f"Error centering popover: {e}")
+            # Fallback to screen center
+            screen_width = self.hotkey_popover.winfo_screenwidth()
+            screen_height = self.hotkey_popover.winfo_screenheight()
+            x = (screen_width - 400) // 2
+            y = (screen_height - 150) // 2
+            self.hotkey_popover.geometry(f"+{x}+{y}")
+    
+    def quick_log_and_close(self):
+        """Log the message and close the popover"""
+        message = self.quick_log_entry.get().strip()
+        if message:
+            # Send LSL message
+            self.send_lsl_message(message)
+            
+            # Update main app display if visible
+            if not self.is_minimized:
+                self.update_log_display(message, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            
+            # Clear entry
+            self.quick_log_entry.delete(0, tk.END)
+        
+        # Close popover
+        self.close_hotkey_popover()
+    
+    def close_hotkey_popover(self):
+        """Close the hotkey popover"""
+        if self.hotkey_popover:
+            self.hotkey_popover.destroy()
+            self.hotkey_popover = None
+    
+    def show_app(self):
+        """Show the main application window"""
+        self.is_minimized = False
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+    
+    def minimize_to_tray(self):
+        """Minimize the app to system tray"""
+        self.is_minimized = True
+        self.root.withdraw()  # Hide the window
+        self.minimize_button.config(text="Restore from Tray")
+    
+    def restore_from_tray(self):
+        """Restore the app from system tray"""
+        self.is_minimized = False
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+        self.minimize_button.config(text="Minimize to Tray")
+    
+    def toggle_minimize(self):
+        """Toggle between minimize and restore"""
+        if self.is_minimized:
+            self.restore_from_tray()
+        else:
+            self.minimize_to_tray()
+    
+    def quit_app(self):
+        """Quit the application completely"""
+        if self.system_tray:
+            self.system_tray.stop()
+        self.on_closing()
+
 
     def setup_gui(self):
         """Create the GUI elements"""
@@ -123,6 +349,10 @@ class LoggerApp:
         # Add Split Recording button
         self.split_recording_button = ttk.Button(recording_frame, text="Split Recording", command=self.split_recording, state="disabled")
         self.split_recording_button.grid(row=0, column=3, padx=5)
+        
+        # Add Minimize to Tray button
+        self.minimize_button = ttk.Button(recording_frame, text="Minimize to Tray", command=self.toggle_minimize)
+        self.minimize_button.grid(row=0, column=4, padx=5)
         
 
         # Text input label and entry frame
@@ -630,6 +860,16 @@ class LoggerApp:
         if self.recording:
             self.stop_recording()
         
+        # Clean up hotkey
+        try:
+            keyboard.remove_hotkey('ctrl+alt+l')
+        except:
+            pass
+        
+        # Clean up system tray
+        if self.system_tray:
+            self.system_tray.stop()
+        
         # Clean up LSL resources
         if hasattr(self, 'outlet') and self.outlet:
             del self.outlet
@@ -644,8 +884,11 @@ def main():
     root = tk.Tk()
     app = LoggerApp(root)
     
-    # Handle window closing
-    root.protocol("WM_DELETE_WINDOW", app.on_closing)
+    # Handle window closing - minimize to tray instead of closing
+    def on_closing():
+        app.minimize_to_tray()
+    
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     
     # Start the GUI
     root.mainloop()
