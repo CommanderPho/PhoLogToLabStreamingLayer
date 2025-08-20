@@ -15,9 +15,6 @@ import pystray
 from PIL import Image, ImageDraw
 import keyboard
 import pyautogui
-import win32gui
-import win32con
-import win32api
 
 # _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
 _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
@@ -161,17 +158,19 @@ class LoggerApp:
     def show_hotkey_popover(self):
         """Show the hotkey popover for quick log entry"""
         if self.hotkey_popover:
-            # If popover already exists, just focus it
+            # If popover already exists, just focus it and select text
             self.hotkey_popover.focus_force()
             self.hotkey_popover.lift()
+            self.quick_log_entry.focus()
+            self.quick_log_entry.select_range(0, tk.END)
             return
         
         # Create popover window
         self.hotkey_popover = tk.Toplevel()
         self.hotkey_popover.title("Quick Log Entry")
-        self.hotkey_popover.geometry("400x150")
+        self.hotkey_popover.geometry("600x220")
         
-        # Center the popover on the active monitor
+        # Center the popover on the screen
         self.center_popover_on_active_monitor()
         
         # Make it always on top
@@ -190,7 +189,7 @@ class LoggerApp:
         
         # Entry field
         entry_frame = ttk.Frame(content_frame)
-        entry_frame.pack(fill=tk.X, pady=(0, 15))
+        entry_frame.pack(fill=tk.X, pady=(0, 10))
         
         entry_label = ttk.Label(entry_frame, text="Message:")
         entry_label.pack(anchor=tk.W)
@@ -198,26 +197,20 @@ class LoggerApp:
         self.quick_log_entry = tk.Entry(entry_frame, font=("Arial", 12))
         self.quick_log_entry.pack(fill=tk.X, pady=(5, 0))
         
-        # Buttons frame
-        button_frame = ttk.Frame(content_frame)
-        button_frame.pack(fill=tk.X)
-        
-        # Log button
-        log_btn = ttk.Button(button_frame, text="Log & Close", command=self.quick_log_and_close)
-        log_btn.pack(side=tk.RIGHT, padx=(5, 0))
-        
-        # Cancel button
-        cancel_btn = ttk.Button(button_frame, text="Cancel", command=self.close_hotkey_popover)
-        cancel_btn.pack(side=tk.RIGHT)
+        # Instructions label
+        instructions_label = ttk.Label(content_frame, text="Press Enter to log, Esc to cancel", 
+                                     font=("Arial", 9), foreground="gray")
+        instructions_label.pack(pady=(5, 0))
         
         # Bind Enter key to log and close
         self.quick_log_entry.bind('<Return>', lambda e: self.quick_log_and_close())
         
-        # Bind Escape key to close
+        # Bind Escape key to close without logging
         self.hotkey_popover.bind('<Escape>', lambda e: self.close_hotkey_popover())
         
-        # Focus the entry field
+        # Focus the entry field and select all text
         self.quick_log_entry.focus()
+        self.quick_log_entry.select_range(0, tk.END)
         
         # Handle window close
         self.hotkey_popover.protocol("WM_DELETE_WINDOW", self.close_hotkey_popover)
@@ -225,27 +218,12 @@ class LoggerApp:
     def center_popover_on_active_monitor(self):
         """Center the popover on the currently active monitor"""
         try:
-            # Get the active window to determine which monitor it's on
-            active_window = win32gui.GetForegroundWindow()
-            if active_window:
-                # Get the monitor info for the active window
-                monitor_info = win32gui.MonitorFromWindow(active_window, win32con.MONITOR_DEFAULTTONEAREST)
-                
-                # Get monitor info
-                monitor_rect = win32gui.GetMonitorInfo(monitor_info)['Monitor']
-                
-                # Calculate center position
-                x = monitor_rect[0] + (monitor_rect[2] - monitor_rect[0]) // 2 - 200  # Half of popover width
-                y = monitor_rect[1] + (monitor_rect[3] - monitor_rect[1]) // 2 - 75   # Half of popover height
-                
-                self.hotkey_popover.geometry(f"+{x}+{y}")
-            else:
-                # Fallback to screen center
-                screen_width = self.hotkey_popover.winfo_screenwidth()
-                screen_height = self.hotkey_popover.winfo_screenheight()
-                x = (screen_width - 400) // 2
-                y = (screen_height - 150) // 2
-                self.hotkey_popover.geometry(f"+{x}+{y}")
+            # Get screen dimensions and center the popover
+            screen_width = self.hotkey_popover.winfo_screenwidth()
+            screen_height = self.hotkey_popover.winfo_screenheight()
+            x = (screen_width - 400) // 2
+            y = (screen_height - 150) // 2
+            self.hotkey_popover.geometry(f"+{x}+{y}")
                 
         except Exception as e:
             print(f"Error centering popover: {e}")
