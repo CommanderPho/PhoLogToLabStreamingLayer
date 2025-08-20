@@ -37,6 +37,10 @@ class LoggerApp:
         self.hotkey_popover = None
         self.is_minimized = False
         
+        # Timestamp tracking for text entry
+        self.main_text_timestamp = None
+        self.popover_text_timestamp = None
+        
         # Create GUI elements first
         self.setup_gui()
         
@@ -202,6 +206,9 @@ class LoggerApp:
         
         self.quick_log_entry = tk.Entry(entry_frame, font=("Arial", 12))
         self.quick_log_entry.pack(fill=tk.X, pady=(5, 0))
+        self.quick_log_entry.bind('<Key>', self.on_popover_text_change)  # Track first keystroke
+        self.quick_log_entry.bind('<BackSpace>', self.on_popover_text_clear)
+        self.quick_log_entry.bind('<Delete>', self.on_popover_text_clear)
         
         # Instructions label
         instructions_label = ttk.Label(content_frame, text="Press Enter to log, Esc to cancel", 
@@ -229,6 +236,46 @@ class LoggerApp:
         if self.hotkey_popover and self.quick_log_entry:
             self.quick_log_entry.focus_force()
             self.quick_log_entry.select_range(0, tk.END)
+    
+    def on_main_text_change(self, event=None):
+        """Track when user first types in main text field"""
+        if self.main_text_timestamp is None:
+            self.main_text_timestamp = datetime.now()
+    
+    def on_popover_text_change(self, event=None):
+        """Track when user first types in popover text field"""
+        if self.popover_text_timestamp is None:
+            self.popover_text_timestamp = datetime.now()
+    
+    def on_main_text_clear(self, event=None):
+        """Reset timestamp when main text field is cleared"""
+        if event and event.keysym in ['BackSpace', 'Delete']:
+            # Check if field is now empty
+            if not self.text_entry.get().strip():
+                self.main_text_timestamp = None
+    
+    def on_popover_text_clear(self, event=None):
+        """Reset timestamp when popover text field is cleared"""
+        if event and event.keysym in ['BackSpace', 'Delete']:
+            # Check if field is now empty
+            if not self.quick_log_entry.get().strip():
+                self.popover_text_timestamp = None
+    
+    def get_main_text_timestamp(self):
+        """Get the timestamp when user first started typing in main field"""
+        if self.main_text_timestamp:
+            timestamp = self.main_text_timestamp
+            self.main_text_timestamp = None  # Reset for next entry
+            return timestamp
+        return datetime.now()
+    
+    def get_popover_text_timestamp(self):
+        """Get the timestamp when user first started typing in popover field"""
+        if self.popover_text_timestamp:
+            timestamp = self.popover_text_timestamp
+            self.popover_text_timestamp = None  # Reset for next entry
+            return timestamp
+        return datetime.now()
     
     def center_popover_on_active_monitor(self):
         """Center the popover on the currently active monitor"""
@@ -258,7 +305,9 @@ class LoggerApp:
             
             # Update main app display if visible
             if not self.is_minimized:
-                self.update_log_display(message, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                # Use the timestamp when user first started typing in popover
+                timestamp = self.get_popover_text_timestamp().strftime("%Y-%m-%d %H:%M:%S")
+                self.update_log_display(message, timestamp)
             
             # Clear entry
             self.quick_log_entry.delete(0, tk.END)
@@ -359,6 +408,9 @@ class LoggerApp:
         self.text_entry = tk.Entry(input_frame, width=50)
         self.text_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 10))
         self.text_entry.bind('<Return>', lambda event: self.log_message())
+        self.text_entry.bind('<Key>', self.on_main_text_change)  # Track first keystroke
+        self.text_entry.bind('<BackSpace>', self.on_main_text_clear)
+        self.text_entry.bind('<Delete>', self.on_main_text_clear)
         
         # Log button
         self.log_button = ttk.Button(input_frame, text="Log", command=self.log_message)
@@ -808,7 +860,8 @@ class LoggerApp:
             messagebox.showwarning("Warning", "Please enter a message to log.")
             return
         
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Use the timestamp when user first started typing
+        timestamp = self.get_main_text_timestamp().strftime("%Y-%m-%d %H:%M:%S")
         
         # Send LSL message
         self.send_lsl_message(message)
