@@ -15,11 +15,41 @@ import pystray
 from PIL import Image, ImageDraw
 import keyboard
 import pyautogui
+import socket
+import sys
 
 # _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
 _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
 
 class LoggerApp:
+    # Class variable to track if an instance is already running
+    _instance_running = False
+    _lock_port = 12345  # Port to use for singleton check
+    
+    @classmethod
+    def is_instance_running(cls):
+        """Check if another instance is already running"""
+        try:
+            # Try to bind to a specific port
+            test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            test_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            test_socket.bind(('localhost', cls._lock_port))
+            test_socket.close()
+            return False
+        except OSError:
+            # Port is already in use, another instance is running
+            return True
+    
+    @classmethod
+    def mark_instance_running(cls):
+        """Mark that an instance is now running"""
+        cls._instance_running = True
+    
+    @classmethod
+    def mark_instance_stopped(cls):
+        """Mark that the instance has stopped"""
+        cls._instance_running = False
+    
     def __init__(self, root):
         self.root = root
         self.root.title("LSL Logger with XDF Recording")
@@ -37,6 +67,12 @@ class LoggerApp:
         self.hotkey_popover = None
         self.is_minimized = False
         
+        # Singleton lock socket
+        self._lock_socket = None
+        
+        # Shutdown flag to prevent GUI updates during shutdown
+        self._shutting_down = False
+        
         # Timestamp tracking for text entry
         self.main_text_timestamp = None
         self.popover_text_timestamp = None
@@ -53,7 +89,32 @@ class LoggerApp:
         # Setup system tray and global hotkey
         self.setup_system_tray()
         self.setup_global_hotkey()
-
+    
+    def acquire_singleton_lock(self):
+        """Acquire the singleton lock by binding to the port"""
+        try:
+            self._lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._lock_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self._lock_socket.bind(('localhost', self._lock_port))
+            self._lock_socket.listen(1)
+            self.mark_instance_running()
+            print("Singleton lock acquired successfully")
+            return True
+        except OSError as e:
+            print(f"Failed to acquire singleton lock: {e}")
+            return False
+    
+    def release_singleton_lock(self):
+        """Release the singleton lock and clean up the socket"""
+        try:
+            if self._lock_socket:
+                self._lock_socket.close()
+                self._lock_socket = None
+            self.mark_instance_stopped()
+            print("Singleton lock released")
+        except Exception as e:
+            print(f"Error releasing singleton lock: {e}")
+    
     def setup_recording_inlet(self):
         """Setup inlet to record our own stream"""
         try:
@@ -95,13 +156,23 @@ class LoggerApp:
             
             # Create outlet
             self.outlet = pylsl.StreamOutlet(info)
-            self.lsl_status_label.config(text="LSL Status: Connected", foreground="green")
+            
+            # Update LSL status label safely
+            try:
+                if not self._shutting_down:
+                    self.lsl_status_label.config(text="LSL Status: Connected", foreground="green")
+            except tk.TclError:
+                pass  # GUI is being destroyed
             
             # Setup inlet for recording our own stream (with delay to allow outlet to be discovered)
             self.root.after(1000, self.setup_recording_inlet)
             
         except Exception as e:
-            self.lsl_status_label.config(text=f"LSL Status: Error - {str(e)}", foreground="red")
+            try:
+                if not self._shutting_down:
+                    self.lsl_status_label.config(text=f"LSL Status: Error - {str(e)}", foreground="red")
+            except tk.TclError:
+                pass  # GUI is being destroyed
             self.outlet = None
     
     def setup_system_tray(self):
@@ -332,7 +403,11 @@ class LoggerApp:
         """Minimize the app to system tray"""
         self.is_minimized = True
         self.root.withdraw()  # Hide the window
-        self.minimize_button.config(text="Restore from Tray")
+        try:
+            if not self._shutting_down:
+                self.minimize_button.config(text="Restore from Tray")
+        except tk.TclError:
+            pass  # GUI is being destroyed
     
     def restore_from_tray(self):
         """Restore the app from system tray"""
@@ -340,7 +415,11 @@ class LoggerApp:
         self.root.deiconify()
         self.root.lift()
         self.root.focus_force()
-        self.minimize_button.config(text="Minimize to Tray")
+        try:
+            if not self._shutting_down:
+                self.minimize_button.config(text="Minimize to Tray")
+        except tk.TclError:
+            pass  # GUI is being destroyed
     
     def toggle_minimize(self):
         """Toggle between minimize and restore"""
@@ -475,11 +554,15 @@ class LoggerApp:
         self.backup_filename = str(Path(filename).with_suffix('.backup.json'))
         
         # Update GUI
-        self.recording_status_label.config(text="Recording...", foreground="green")
-        self.start_recording_button.config(state="disabled")
-        self.stop_recording_button.config(state="normal")
-        self.split_recording_button.config(state="normal")  # Enable split button
-        self.status_info_label.config(text=f"Recording to: {os.path.basename(filename)}")
+        try:
+            if not self._shutting_down:
+                self.recording_status_label.config(text="Recording...", foreground="green")
+                self.start_recording_button.config(state="disabled")
+                self.stop_recording_button.config(state="normal")
+                self.split_recording_button.config(state="normal")  # Enable split button
+                self.status_info_label.config(text=f"Recording to: {os.path.basename(filename)}")
+        except tk.TclError:
+            pass  # GUI is being destroyed
         
         # Start recording thread
         self.recording_thread = threading.Thread(target=self.recording_worker, daemon=True)
@@ -512,11 +595,15 @@ class LoggerApp:
             self.backup_filename = str(Path(self.xdf_filename).with_suffix('.backup.json'))
             
             # Update GUI
-            self.recording_status_label.config(text="Recording...", foreground="green")
-            self.start_recording_button.config(state="disabled")
-            self.stop_recording_button.config(state="normal")
-            self.split_recording_button.config(state="normal")  # Enable split button
-            self.status_info_label.config(text=f"Auto-recording to: {os.path.basename(self.xdf_filename)}")
+            try:
+                if not self._shutting_down:
+                    self.recording_status_label.config(text="Recording...", foreground="green")
+                    self.start_recording_button.config(state="disabled")
+                    self.stop_recording_button.config(state="normal")
+                    self.split_recording_button.config(state="normal")  # Enable split button
+                    self.status_info_label.config(text=f"Auto-recording to: {os.path.basename(self.xdf_filename)}")
+            except tk.TclError:
+                pass  # GUI is being destroyed
             
             # Start recording thread
             self.recording_thread = threading.Thread(target=self.recording_worker, daemon=True)
@@ -586,11 +673,15 @@ class LoggerApp:
             print(f"Error removing backup file: {e}")
         
         # Update GUI
-        self.recording_status_label.config(text="Not Recording", foreground="red")
-        self.start_recording_button.config(state="normal")
-        self.stop_recording_button.config(state="disabled")
-        self.split_recording_button.config(state="disabled")  # Disable split button
-        self.status_info_label.config(text="Ready")
+        try:
+            if not self._shutting_down:
+                self.recording_status_label.config(text="Not Recording", foreground="red")
+                self.start_recording_button.config(state="normal")
+                self.stop_recording_button.config(state="disabled")
+                self.split_recording_button.config(state="disabled")  # Disable split button
+                self.status_info_label.config(text="Ready")
+        except tk.TclError:
+            pass  # GUI is being destroyed
         
         self.update_log_display("XDF Recording stopped and saved", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
@@ -637,11 +728,15 @@ class LoggerApp:
             self.backup_filename = str(Path(self.xdf_filename).with_suffix('.backup.json'))
             
             # Update GUI
-            self.recording_status_label.config(text="Recording...", foreground="green")
-            self.start_recording_button.config(state="disabled")
-            self.stop_recording_button.config(state="normal")
-            self.split_recording_button.config(state="normal")
-            self.status_info_label.config(text=f"Split to: {os.path.basename(self.xdf_filename)}")
+            try:
+                if not self._shutting_down:
+                    self.recording_status_label.config(text="Recording...", foreground="green")
+                    self.start_recording_button.config(state="disabled")
+                    self.stop_recording_button.config(state="normal")
+                    self.split_recording_button.config(state="normal")
+                    self.status_info_label.config(text=f"Split to: {os.path.basename(self.xdf_filename)}")
+            except tk.TclError:
+                pass  # GUI is being destroyed
             
             # Start recording thread
             self.recording_thread = threading.Thread(target=self.recording_worker, daemon=True)
@@ -888,13 +983,21 @@ class LoggerApp:
     
     def update_log_display(self, message, timestamp=None):
         """Update the log display area"""
+        # Don't update GUI if app is shutting down
+        if self._shutting_down:
+            return
+            
         if timestamp is None:
             ## get now as the timestamp
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        log_entry = f"[{timestamp}] {message}\n"
-        self.log_display.insert(tk.END, log_entry)
-        self.log_display.see(tk.END)  # Auto-scroll to bottom
+        try:
+            log_entry = f"[{timestamp}] {message}\n"
+            self.log_display.insert(tk.END, log_entry)
+            self.log_display.see(tk.END)  # Auto-scroll to bottom
+        except tk.TclError:
+            # GUI is being destroyed, ignore the error
+            pass
     
     def clear_log_display(self):
         """Clear the log display area"""
@@ -902,6 +1005,9 @@ class LoggerApp:
     
     def on_closing(self):
         """Handle window closing"""
+        # Set shutdown flag to prevent GUI updates
+        self._shutting_down = True
+        
         # Stop recording if active
         if self.recording:
             self.stop_recording()
@@ -922,13 +1028,31 @@ class LoggerApp:
         if hasattr(self, 'inlet') and self.inlet:
             del self.inlet
         
+        # Release singleton lock
+        self.release_singleton_lock()
+        
         self.root.destroy()
 
 
 
 def main():
+    # Check if another instance is already running
+    if LoggerApp.is_instance_running():
+        messagebox.showerror("Instance Already Running", 
+                           "Another instance of LSL Logger is already running.\n"
+                           "Only one instance can run at a time.")
+        sys.exit(1)
+    
     root = tk.Tk()
     app = LoggerApp(root)
+    
+    # Try to acquire the singleton lock
+    if not app.acquire_singleton_lock():
+        messagebox.showerror("Startup Error", 
+                           "Failed to acquire singleton lock.\n"
+                           "Another instance may be running.")
+        root.destroy()
+        sys.exit(1)
     
     # Handle window closing - minimize to tray instead of closing
     def on_closing():
