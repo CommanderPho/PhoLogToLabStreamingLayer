@@ -152,7 +152,7 @@ class LoggerApp:
             
             # Add some metadata
             info.desc().append_child_value("manufacturer", "PhoLogToLabStreamingLayer")
-            info.desc().append_child_value("version", "1.0")
+            info.desc().append_child_value("version", "2.0")
             
             # Create outlet
             self.outlet = pylsl.StreamOutlet(info)
@@ -197,7 +197,7 @@ class LoggerApp:
             )
             
             # Add double-click handler to show app
-            self.system_tray.on_activate = self.show_app
+            self.system_tray.on_activate = self.show_app ## double-clicking doesn't foreground the app by default. Also clicking the windows close "X" just hides it to taskbar by default which I don't want. 
             
             # Start system tray in a separate thread
             threading.Thread(target=self.system_tray.run, daemon=True).start()
