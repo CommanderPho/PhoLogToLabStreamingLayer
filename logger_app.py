@@ -1054,11 +1054,10 @@ def main():
         root.destroy()
         sys.exit(1)
     
-    # Handle window closing - minimize to tray instead of closing
-    def on_closing():
-        app.minimize_to_tray()
-    
-    root.protocol("WM_DELETE_WINDOW", on_closing)
+    # # Handle window closing - minimize to tray instead of closing
+    # def on_closing():
+    #     app.minimize_to_tray()
+    # root.protocol("WM_DELETE_WINDOW", on_closing)
     
     # Start the GUI
     root.mainloop()
