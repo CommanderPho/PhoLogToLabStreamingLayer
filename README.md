@@ -29,3 +29,17 @@ make
 sudo make install
 
 ```
+
+
+# Installing Tk/KTinker on macOS
+```bash
+brew install tcl-tk
+export LDFLAGS="-L$(brew --prefix tcl-tk)/lib"
+export CPPFLAGS="-I$(brew --prefix tcl-tk)/include"
+export PKG_CONFIG_PATH="$(brew --prefix tcl-tk)/lib/pkgconfig"
+export PATH="$(brew --prefix tcl-tk)/bin:$PATH"
+
+pyenv uninstall 3.9.13
+pyenv install 3.9.13
+
+```
