@@ -91,31 +91,30 @@ This enhanced version of the LSL Logger App includes system tray functionality a
 - **Dependencies**: Ensure all packages are properly installed with `pip install -r requirements.txt`
 
 
-# EventBoard Functionality
+# EventBoard Functionality - Enhanced
 
-The Logger App now includes an EventBoard feature that provides a 3x5 grid of customizable buttons for sending LabStreamingLayer (LSL) events.
+The Logger App now includes an enhanced EventBoard feature with support for both instantaneous and toggleable events, plus time offset capabilities.
 
-## Features
+## New Features
 
-- **3x5 Button Grid**: 15 customizable buttons arranged in 3 rows and 5 columns
-- **LSL Integration**: Each button click sends events to a dedicated "EventBoard" LSL stream
-- **Configurable**: Button text, colors, and event names are defined in a JSON configuration file
-- **Real-time Logging**: All button clicks are logged in the main application log
+### 1. **Two Button Types**
+- **Instantaneous Events**: Traditional one-click events (e.g., "Start Task", "Error")
+- **Toggleable Events**: Can be toggled ON/OFF to indicate state changes (e.g., "Focus Mode", "Distracted")
+
+### 2. **Time Offset Support**
+- **Small dropdown** next to each button (20% of button width)
+- **Retroactive logging**: Enter time offsets like "5s", "2m", "1h" to log events that occurred in the past
+- **Default units**: Seconds if no unit specified
+- **Unintrusive design**: Placeholder text "0s" that disappears when clicked
+
+### 3. **Visual Indicators**
+- **Toggleable buttons**: Show 🔘 when OFF, 🔴 when ON
+- **Button relief**: Raised when OFF, sunken when ON
+- **Color coding**: Maintained for easy identification
 
 ## Configuration
 
-The EventBoard is configured using the `eventboard_config.json` file. This file defines:
-
-- **title**: The title displayed above the button grid
-- **buttons**: Array of button configurations, each containing:
-  - `id`: Unique identifier for the button
-  - `row`: Row position (1-3)
-  - `col`: Column position (1-5)
-  - `text`: Display text on the button
-  - `event_name`: LSL event name sent when clicked
-  - `color`: Button background color (hex format)
-
-### Example Configuration
+The EventBoard configuration now supports button types:
 
 ```json
 {
@@ -128,81 +127,128 @@ The EventBoard is configured using the `eventboard_config.json` file. This file 
         "col": 1,
         "text": "Start Task",
         "event_name": "TASK_START",
-        "color": "#4CAF50"
+        "color": "#4CAF50",
+        "type": "instantaneous"
       },
       {
-        "id": "button_1_2",
-        "row": 1,
-        "col": 2,
-        "text": "Pause",
-        "event_name": "TASK_PAUSE",
-        "color": "#FF9800"
+        "id": "button_2_1",
+        "row": 2,
+        "col": 1,
+        "text": "Focus Mode",
+        "event_name": "FOCUS_MODE",
+        "color": "#607D8B",
+        "type": "toggleable"
       }
     ]
   }
 }
 ```
 
-## LSL Stream Details
+### Button Properties
+- `type`: Either "instantaneous" or "toggleable"
+- All other properties remain the same (id, row, col, text, event_name, color)
 
-The EventBoard creates a dedicated LSL stream with the following properties:
+## Time Offset Usage
 
-- **Stream Name**: "EventBoard"
-- **Stream Type**: "Markers"
-- **Channel Count**: 1
-- **Channel Format**: String
-- **Sample Rate**: Irregular (event-driven)
+### Supported Formats
+- `5s` - 5 seconds ago
+- `2m` - 2 minutes ago  
+- `1h` - 1 hour ago
+- `30` - 30 seconds ago (default unit is seconds)
+- `1.5m` - 1.5 minutes ago
 
-### Event Message Format
+### How to Use
+1. Click in the time offset field next to any button
+2. Type the desired offset (e.g., "5s")
+3. Press **Enter** to log the event with the time offset, or click the button
+4. The event will be timestamped as if it occurred that many seconds/minutes/hours ago
 
-Each button click sends a message in the format:
+## LSL Event Format
+
+### Instantaneous Events
 ```
 EVENT_NAME|BUTTON_TEXT|TIMESTAMP
 ```
 
-Example:
+### Toggleable Events
+```
+EVENT_NAME_START|BUTTON_TEXT|TIMESTAMP|TOGGLE:True
+EVENT_NAME_END|BUTTON_TEXT|TIMESTAMP|TOGGLE:False
+```
+
+### Example Messages
 ```
 TASK_START|Start Task|2024-01-15T10:30:45.123456
+FOCUS_MODE_START|Focus Mode|2024-01-15T10:30:45.123456|TOGGLE:True
+FOCUS_MODE_END|Focus Mode|2024-01-15T10:35:20.789012|TOGGLE:False
 ```
 
-## Usage
+## GUI Layout
 
-1. **Start the Logger App**: Run `python logger_app.py`
-2. **EventBoard appears**: The 3x5 button grid will be displayed below the recording controls
-3. **Click buttons**: Each button click sends an LSL event and logs the action
-4. **Monitor events**: Use the provided `test_eventboard.py` script to monitor incoming events
+Each button cell now contains:
+- **Main button** (80% width): The actual event button
+- **Time offset field** (20% width): Small entry field for time offsets
+
+### Button States
+
+#### Instantaneous Buttons
+- Always show the same appearance
+- Single click sends one event
+
+#### Toggleable Buttons
+- **OFF state**: 🔘 Button Text (raised relief)
+- **ON state**: 🔴 Button Text (sunken relief)
+- Click toggles between states
+- Each state change sends a separate LSL event
+
+## Usage Examples
+
+### Example 1: Logging a Memory Lapse 5 Seconds Ago
+1. Click in the time offset field next to "Memory Lapse" button
+2. Type "5s"
+3. Press **Enter** or click the "Memory Lapse" button
+4. Event is logged as occurring 5 seconds ago
+
+### Example 2: Toggling Focus Mode
+1. Click "Focus Mode" button (shows 🔴 Focus Mode, sunken)
+2. LSL event: `FOCUS_MODE_START|Focus Mode|TIMESTAMP|TOGGLE:True`
+3. Click again (shows 🔘 Focus Mode, raised)
+4. LSL event: `FOCUS_MODE_END|Focus Mode|TIMESTAMP|TOGGLE:False`
+
+### Example 3: Logging a Break 2 Minutes Ago
+1. Click in time offset field next to "Break Time" button
+2. Type "2m"
+3. Press **Enter** or click "Break Time" button
+4. Event is logged as starting 2 minutes ago
 
 ## Testing
 
-To test the EventBoard functionality:
+Use the updated `test_eventboard.py` script to monitor events:
 
-1. Start the Logger App
-2. In a separate terminal, run: `python test_eventboard.py`
-3. Click buttons in the Logger App
-4. Observe the events being received in the test script
+```bash
+python test_eventboard.py
+```
 
-## Customization
+The script now displays:
+- Event name and button text
+- LSL timestamp and event timestamp
+- Toggle state (for toggleable events)
+- Time offset information
 
-To customize the EventBoard:
+## Integration
 
-1. Edit `eventboard_config.json` to modify button properties
-2. Restart the Logger App to load the new configuration
-3. If the config file is missing, the app will use default button configurations
-
-## Integration with Existing Features
-
-The EventBoard integrates seamlessly with existing Logger App features:
-
-- **Recording**: EventBoard events are recorded along with text messages
-- **Logging**: All button clicks appear in the main log display
-- **LSL**: Events are sent via a separate LSL stream from text messages
-- **System Tray**: EventBoard remains accessible when the app is minimized
+The enhanced EventBoard integrates seamlessly with existing features:
+- **Recording**: All events (instantaneous and toggleable) are recorded
+- **Logging**: Visual feedback in main application log
+- **LSL**: Separate stream with enhanced event format
+- **Time accuracy**: Precise timestamping with offset support
 
 ## Troubleshooting
 
-- **No buttons appear**: Check that `eventboard_config.json` exists and is valid JSON
-- **LSL events not received**: Verify that the EventBoard LSL outlet is created successfully (check console output)
-- **Button colors not applied**: Ensure color values are in valid hex format (e.g., "#FF0000")
+- **Time offset not working**: Ensure format is correct (e.g., "5s", "2m", "1h")
+- **Toggle buttons not changing**: Check that button type is set to "toggleable" in config
+- **Events not received**: Verify LSL outlet is created successfully (check console output)
+- **Time offset field not responding**: Click in the field to activate it, type offset, then press Enter or click button
 
 
 
