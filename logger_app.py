@@ -802,17 +802,23 @@ class LoggerApp:
                 original_color = self.eventboard_original_colors.get(button_id, "#2196F3")  # Default fallback
                 
                 if new_state:
-                    # ON state - more prominent visual indicators
+                    # ON state - red border with original background
                     button.config(
                         text=f"🔴 {button_text}",
                         font=("Arial", 10, "bold"),  # Slightly larger, bolder font
-                        bg="#FF4444"  # Brighter red background for active state
+                        bg=original_color,  # Keep original background color
+                        highlightthickness=3,  # Thicker highlight border
+                        highlightbackground="#FF4444",  # Red border
+                        highlightcolor="#FF4444"  # Red border when focused
                     )
-                    # Update container frame to show pressed state with enhanced styling
+                    # Update container frame to show pressed state with red border
                     button.master.config(
                         relief="sunken",
                         bd=3,  # Thicker border for active state
-                        bg="#FF4444"  # Match button background
+                        bg=original_color,  # Keep original background
+                        highlightthickness=3,  # Thicker highlight border
+                        highlightbackground="#FF4444",  # Red border
+                        highlightcolor="#FF4444"  # Red border when focused
                     )
                     event_suffix = "_START"
                 else:
@@ -820,13 +826,19 @@ class LoggerApp:
                     button.config(
                         text=f"🔘 {button_text}",
                         font=("Arial", 9, "bold"),  # Normal font size
-                        bg=original_color  # Original button color
+                        bg=original_color,  # Original button color
+                        highlightthickness=0,  # No highlight border
+                        highlightbackground=original_color,
+                        highlightcolor=original_color
                     )
                     # Update container frame to show normal state
                     button.master.config(
                         relief="raised",
                         bd=2,  # Normal border thickness
-                        bg=original_color  # Original color
+                        bg=original_color,  # Original color
+                        highlightthickness=0,  # No highlight border
+                        highlightbackground=original_color,
+                        highlightcolor=original_color
                     )
                     event_suffix = "_END"
                 
@@ -839,11 +851,23 @@ class LoggerApp:
                 
                 if time_offset_entry:
                     if new_state:
-                        # Active state - match the bright red theme
-                        time_offset_entry.config(bg="#FF4444", fg="white")
+                        # Active state - red border with original background
+                        time_offset_entry.config(
+                            bg=original_color,  # Keep original background
+                            fg="white",
+                            highlightthickness=2,  # Thicker highlight border
+                            highlightbackground="#FF4444",  # Red border
+                            highlightcolor="#FF4444"  # Red border when focused
+                        )
                     else:
                         # Normal state - match original button color
-                        time_offset_entry.config(bg=original_color, fg="white")
+                        time_offset_entry.config(
+                            bg=original_color, 
+                            fg="white",
+                            highlightthickness=0,  # No highlight border
+                            highlightbackground=original_color,
+                            highlightcolor=original_color
+                        )
                 
                 # Send LSL event with toggle state
                 self.send_eventboard_message(f"{event_name}{event_suffix}", button_text, actual_timestamp, new_state)
