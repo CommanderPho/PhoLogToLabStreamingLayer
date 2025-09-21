@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 import pylsl
 import pyxdf
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import threading
 import time
@@ -55,6 +55,9 @@ class LoggerApp:
         self.root.title("LSL Logger with XDF Recording")
         self.root.geometry("600x500")
         
+        # Set application icon
+        self.setup_app_icon()
+        
         # Recording state
         self.recording = False
         self.recording_thread = None
@@ -81,6 +84,8 @@ class LoggerApp:
         self.eventboard_config = None
         self.eventboard_outlet = None
         self.eventboard_buttons = {}
+        self.eventboard_toggle_states = {}  # Track toggle states
+        self.eventboard_time_offsets = {}   # Track time offset dropdowns
         
         # Load EventBoard configuration
         self.load_eventboard_config()
@@ -125,10 +130,50 @@ class LoggerApp:
             "title": "Event Board",
             "buttons": [
                 {"id": f"button_{i}_{j}", "row": i, "col": j, "text": f"Button {i}-{j}", 
-                 "event_name": f"EVENT_{i}_{j}", "color": "#2196F3"}
+                 "event_name": f"EVENT_{i}_{j}", "color": "#2196F3", "type": "instantaneous"}
                 for i in range(1, 4) for j in range(1, 6)
             ]
         }
+    
+    def setup_app_icon(self):
+        """Setup application icon from PNG file"""
+        try:
+            icon_path = Path("LogToLabStreamingLayerIcon.png")
+            if icon_path.exists():
+                # Set window icon
+                self.root.iconphoto(True, tk.PhotoImage(file=str(icon_path)))
+                print(f"Application icon set from {icon_path}")
+            else:
+                print(f"Icon file not found: {icon_path}")
+        except Exception as e:
+            print(f"Error setting application icon: {e}")
+    
+    def parse_time_offset(self, time_str):
+        """Parse time offset string (e.g., '5s', '2m', '1h') to seconds"""
+        if not time_str or not time_str.strip():
+            return 0
+        
+        time_str = time_str.strip().lower()
+        
+        # Extract number and unit
+        import re
+        match = re.match(r'^(\d+(?:\.\d+)?)\s*([smh]?)$', time_str)
+        
+        if not match:
+            return 0
+        
+        value = float(match.group(1))
+        unit = match.group(2) or 's'  # Default to seconds if no unit
+        
+        # Convert to seconds
+        if unit == 's':
+            return value
+        elif unit == 'm':
+            return value * 60
+        elif unit == 'h':
+            return value * 3600
+        else:
+            return 0
 
     def acquire_singleton_lock(self):
         """Acquire the singleton lock by binding to the port"""
@@ -272,7 +317,24 @@ class LoggerApp:
             print(f"Error setting up system tray: {e}")
     
     def create_tray_icon(self):
-        """Create a simple icon for the system tray"""
+        """Create icon for the system tray from PNG file"""
+        try:
+            icon_path = Path("LogToLabStreamingLayerIcon.png")
+            if icon_path.exists():
+                # Load and resize the PNG icon for system tray
+                image = Image.open(str(icon_path))
+                # Resize to appropriate size for system tray (16x16 or 32x32)
+                image = image.resize((16, 16), Image.Resampling.LANCZOS)
+                return image
+            else:
+                print(f"Tray icon file not found: {icon_path}, using default")
+                return self.create_default_tray_icon()
+        except Exception as e:
+            print(f"Error loading tray icon: {e}, using default")
+            return self.create_default_tray_icon()
+    
+    def create_default_tray_icon(self):
+        """Create a simple default icon for the system tray"""
         # Create a 16x16 icon with a simple design
         width = 16
         height = 16
@@ -586,7 +648,7 @@ class LoggerApp:
         self.text_entry.focus()
     
     def setup_eventboard_gui(self, parent):
-        """Setup EventBoard GUI with 3x5 grid of buttons"""
+        """Setup EventBoard GUI with 3x5 grid of buttons and time offset dropdowns"""
         if not self.eventboard_config:
             return
         
@@ -594,7 +656,7 @@ class LoggerApp:
         eventboard_frame = ttk.LabelFrame(parent, text=self.eventboard_config.get('title', 'Event Board'), padding="10")
         eventboard_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
         
-        # Configure grid for 3 rows and 5 columns
+        # Configure grid for 3 rows and 5 columns (each cell has button + dropdown)
         for i in range(3):
             eventboard_frame.rowconfigure(i, weight=1)
         for j in range(5):
@@ -608,50 +670,223 @@ class LoggerApp:
             text = button_config.get('text', 'Button')
             event_name = button_config.get('event_name', 'UNKNOWN_EVENT')
             color = button_config.get('color', '#2196F3')
+            button_type = button_config.get('type', 'instantaneous')
             button_id = button_config.get('id', f'button_{row}_{col}')
             
-            # Create button with custom styling
+            # Create container frame for button and dropdown with integrated styling
+            cell_frame = tk.Frame(eventboard_frame, bg=color, relief="raised", bd=2)
+            cell_frame.grid(row=row, column=col, sticky=(tk.W, tk.E, tk.N, tk.S), padx=2, pady=2)
+            cell_frame.columnconfigure(0, weight=4)  # Button takes 80% of width
+            cell_frame.columnconfigure(1, weight=1)  # Dropdown takes 20% of width
+            cell_frame.rowconfigure(0, weight=1)
+            
+            # Create button with custom styling (no border to integrate with container)
+            button_text = text
+            if button_type == 'toggleable':
+                button_text = f"🔘 {text}"  # Add indicator for toggleable buttons
+            
             button = tk.Button(
-                eventboard_frame,
-                text=text,
-                font=("Arial", 10, "bold"),
+                cell_frame,
+                text=button_text,
+                font=("Arial", 9, "bold"),
                 bg=color,
                 fg="white",
-                relief="raised",
-                bd=2,
-                padx=10,
-                pady=10,
-                command=lambda e=event_name, t=text: self.on_eventboard_button_click(e, t)
+                relief="flat",  # Flat relief to integrate with container
+                bd=0,  # No border
+                padx=5,
+                pady=5,
+                command=lambda e=event_name, t=text, bt=button_type, bid=button_id: self.on_eventboard_button_click(e, t, bt, bid)
             )
             
-            button.grid(row=row, column=col, sticky=(tk.W, tk.E, tk.N, tk.S), padx=2, pady=2)
+            button.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(0, 1))
             
-            # Store button reference
+            # Create time offset entry with matching styling
+            time_offset_var = tk.StringVar()
+            time_offset_entry = tk.Entry(
+                cell_frame,
+                textvariable=time_offset_var,
+                font=("Arial", 8),
+                width=4,
+                justify='center',
+                bg=color,  # Match button background
+                fg="white",  # Match button text color
+                relief="flat",  # Flat relief to integrate
+                bd=0,  # No border
+                insertbackground="white"  # White cursor for visibility
+            )
+            time_offset_entry.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(1, 0))
+            
+            # Add placeholder text
+            time_offset_entry.insert(0, "0s")
+            time_offset_entry.config(fg='lightgray')  # Light gray for better visibility on colored background
+            
+            # Bind events for placeholder behavior and Enter key
+            time_offset_entry.bind('<FocusIn>', lambda e, entry=time_offset_entry: self.on_time_offset_focus_in(entry))
+            time_offset_entry.bind('<FocusOut>', lambda e, entry=time_offset_entry: self.on_time_offset_focus_out(entry))
+            time_offset_entry.bind('<Key>', lambda e, entry=time_offset_entry: self.on_time_offset_key(entry))
+            time_offset_entry.bind('<Return>', lambda e, entry=time_offset_entry, bid=button_id: self.on_time_offset_enter(entry, bid))
+            
+            # Store references
             self.eventboard_buttons[button_id] = button
+            self.eventboard_time_offsets[button_id] = time_offset_var
+            
+            # Store original color for toggleable buttons
+            if button_type == 'toggleable':
+                self.eventboard_toggle_states[button_id] = False
+                # Store the original color for later restoration
+                if not hasattr(self, 'eventboard_original_colors'):
+                    self.eventboard_original_colors = {}
+                self.eventboard_original_colors[button_id] = color
     
-    def on_eventboard_button_click(self, event_name, button_text):
+    def on_time_offset_focus_in(self, entry):
+        """Handle focus in on time offset entry"""
+        if entry.get() == "0s":
+            entry.delete(0, tk.END)
+            entry.config(fg='white')  # White text for active input
+    
+    def on_time_offset_focus_out(self, entry):
+        """Handle focus out on time offset entry"""
+        if not entry.get().strip():
+            entry.insert(0, "0s")
+            entry.config(fg='lightgray')  # Light gray for placeholder
+        else:
+            entry.config(fg='white')  # White text for actual content
+    
+    def on_time_offset_key(self, entry):
+        """Handle key press in time offset entry"""
+        entry.config(fg='white')  # White text when typing
+    
+    def on_time_offset_enter(self, entry, button_id):
+        """Handle Enter key press in time offset entry - trigger button click"""
+        # Get the button and trigger its click
+        button = self.eventboard_buttons.get(button_id)
+        if button:
+            # Get button configuration to determine type and event details
+            buttons = self.eventboard_config.get('buttons', [])
+            button_config = next((b for b in buttons if b.get('id') == button_id), None)
+            
+            if button_config:
+                event_name = button_config.get('event_name', 'UNKNOWN_EVENT')
+                button_text = button_config.get('text', 'Button')
+                button_type = button_config.get('type', 'instantaneous')
+                
+                # Trigger the button click
+                self.on_eventboard_button_click(event_name, button_text, button_type, button_id)
+        
+        # Clear the field and reset to placeholder
+        entry.delete(0, tk.END)
+        entry.insert(0, "0s")
+        entry.config(fg='lightgray')  # Reset to placeholder color
+        
+        # Release focus from the entry field
+        entry.master.focus_set()  # Focus the container frame instead
+    
+    def on_eventboard_button_click(self, event_name, button_text, button_type, button_id):
         """Handle EventBoard button click"""
         try:
-            # Send LSL event
-            self.send_eventboard_message(event_name, button_text)
+            # Get time offset
+            time_offset_str = self.eventboard_time_offsets.get(button_id, tk.StringVar()).get()
+            time_offset_seconds = self.parse_time_offset(time_offset_str)
+            
+            # Calculate actual timestamp (current time - offset)
+            actual_timestamp = datetime.now() - timedelta(seconds=time_offset_seconds)
+            
+            if button_type == 'toggleable':
+                # Toggle the state
+                current_state = self.eventboard_toggle_states.get(button_id, False)
+                new_state = not current_state
+                self.eventboard_toggle_states[button_id] = new_state
+                
+                # Update button appearance with enhanced visual feedback
+                button = self.eventboard_buttons[button_id]
+                original_color = self.eventboard_original_colors.get(button_id, "#2196F3")  # Default fallback
+                
+                if new_state:
+                    # ON state - more prominent visual indicators
+                    button.config(
+                        text=f"🔴 {button_text}",
+                        font=("Arial", 10, "bold"),  # Slightly larger, bolder font
+                        bg="#FF4444"  # Brighter red background for active state
+                    )
+                    # Update container frame to show pressed state with enhanced styling
+                    button.master.config(
+                        relief="sunken",
+                        bd=3,  # Thicker border for active state
+                        bg="#FF4444"  # Match button background
+                    )
+                    event_suffix = "_START"
+                else:
+                    # OFF state - normal appearance
+                    button.config(
+                        text=f"🔘 {button_text}",
+                        font=("Arial", 9, "bold"),  # Normal font size
+                        bg=original_color  # Original button color
+                    )
+                    # Update container frame to show normal state
+                    button.master.config(
+                        relief="raised",
+                        bd=2,  # Normal border thickness
+                        bg=original_color  # Original color
+                    )
+                    event_suffix = "_END"
+                
+                # Update time offset entry field to match active state
+                time_offset_entry = None
+                for widget in button.master.winfo_children():
+                    if isinstance(widget, tk.Entry):
+                        time_offset_entry = widget
+                        break
+                
+                if time_offset_entry:
+                    if new_state:
+                        # Active state - match the bright red theme
+                        time_offset_entry.config(bg="#FF4444", fg="white")
+                    else:
+                        # Normal state - match original button color
+                        time_offset_entry.config(bg=original_color, fg="white")
+                
+                # Send LSL event with toggle state
+                self.send_eventboard_message(f"{event_name}{event_suffix}", button_text, actual_timestamp, new_state)
+                
+                # Update log display
+                log_message = f"EventBoard: {button_text} {'ON' if new_state else 'OFF'} ({event_name}{event_suffix})"
+                if time_offset_seconds > 0:
+                    log_message += f" [offset: -{time_offset_str}]"
+                
+            else:
+                # Instantaneous event
+                self.send_eventboard_message(event_name, button_text, actual_timestamp, None)
+                
+                # Update log display
+                log_message = f"EventBoard: {button_text} ({event_name})"
+                if time_offset_seconds > 0:
+                    log_message += f" [offset: -{time_offset_str}]"
             
             # Update log display
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            log_message = f"EventBoard: {button_text} ({event_name})"
+            timestamp = actual_timestamp.strftime("%Y-%m-%d %H:%M:%S")
             self.update_log_display(log_message, timestamp)
             
-            print(f"EventBoard button clicked: {button_text} -> {event_name}")
+            print(f"EventBoard button clicked: {button_text} -> {event_name} (type: {button_type})")
             
         except Exception as e:
             print(f"Error handling EventBoard button click: {e}")
             messagebox.showerror("EventBoard Error", f"Failed to send event: {str(e)}")
     
-    def send_eventboard_message(self, event_name, button_text):
+    def send_eventboard_message(self, event_name, button_text, timestamp=None, toggle_state=None):
         """Send EventBoard message via LSL"""
         if self.eventboard_outlet:
             try:
-                # Create event message with timestamp and button info
-                event_message = f"{event_name}|{button_text}|{datetime.now().isoformat()}"
+                # Use provided timestamp or current time
+                if timestamp is None:
+                    timestamp = datetime.now()
+                
+                # Create event message with timestamp, button info, and toggle state
+                event_message = f"{event_name}|{button_text}|{timestamp.isoformat()}"
+                
+                # Add toggle state if provided
+                if toggle_state is not None:
+                    event_message += f"|TOGGLE:{toggle_state}"
+                
                 self.eventboard_outlet.push_sample([event_message])
                 print(f"EventBoard LSL message sent: {event_message}")
             except Exception as e:

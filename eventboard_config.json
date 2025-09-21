@@ -8,7 +8,8 @@
         "col": 1,
         "text": "Start Task",
         "event_name": "TASK_START",
-        "color": "#4CAF50"
+        "color": "#4CAF50",
+        "type": "instantaneous"
       },
       {
         "id": "button_1_2",
@@ -16,7 +17,8 @@
         "col": 2,
         "text": "Pause",
         "event_name": "TASK_PAUSE",
-        "color": "#FF9800"
+        "color": "#FF9800",
+        "type": "instantaneous"
       },
       {
         "id": "button_1_3",
@@ -24,7 +26,8 @@
         "col": 3,
         "text": "Resume",
         "event_name": "TASK_RESUME",
-        "color": "#2196F3"
+        "color": "#2196F3",
+        "type": "instantaneous"
       },
       {
         "id": "button_1_4",
@@ -32,7 +35,8 @@
         "col": 4,
         "text": "Stop Task",
         "event_name": "TASK_STOP",
-        "color": "#F44336"
+        "color": "#F44336",
+        "type": "instantaneous"
       },
       {
         "id": "button_1_5",
@@ -40,47 +44,53 @@
         "col": 5,
         "text": "Error",
         "event_name": "ERROR_OCCURRED",
-        "color": "#9C27B0"
+        "color": "#9C27B0",
+        "type": "instantaneous"
       },
       {
         "id": "button_2_1",
         "row": 2,
         "col": 1,
-        "text": "Question 1",
-        "event_name": "QUESTION_1",
-        "color": "#607D8B"
+        "text": "Focus Mode",
+        "event_name": "FOCUS_MODE",
+        "color": "#607D8B",
+        "type": "toggleable"
       },
       {
         "id": "button_2_2",
         "row": 2,
         "col": 2,
-        "text": "Question 2",
-        "event_name": "QUESTION_2",
-        "color": "#607D8B"
+        "text": "Distracted",
+        "event_name": "DISTRACTED",
+        "color": "#FF5722",
+        "type": "toggleable"
       },
       {
         "id": "button_2_3",
         "row": 2,
         "col": 3,
-        "text": "Question 3",
-        "event_name": "QUESTION_3",
-        "color": "#607D8B"
+        "text": "Memory Lapse",
+        "event_name": "MEMORY_LAPSE",
+        "color": "#9C27B0",
+        "type": "instantaneous"
       },
       {
         "id": "button_2_4",
         "row": 2,
         "col": 4,
-        "text": "Question 4",
-        "event_name": "QUESTION_4",
-        "color": "#607D8B"
+        "text": "Confused",
+        "event_name": "CONFUSED",
+        "color": "#795548",
+        "type": "toggleable"
       },
       {
         "id": "button_2_5",
         "row": 2,
         "col": 5,
-        "text": "Question 5",
-        "event_name": "QUESTION_5",
-        "color": "#607D8B"
+        "text": "Break Time",
+        "event_name": "BREAK_TIME",
+        "color": "#4CAF50",
+        "type": "toggleable"
       },
       {
         "id": "button_3_1",
@@ -88,7 +98,8 @@
         "col": 1,
         "text": "Response A",
         "event_name": "RESPONSE_A",
-        "color": "#795548"
+        "color": "#795548",
+        "type": "instantaneous"
       },
       {
         "id": "button_3_2",
@@ -96,7 +107,8 @@
         "col": 2,
         "text": "Response B",
         "event_name": "RESPONSE_B",
-        "color": "#795548"
+        "color": "#795548",
+        "type": "instantaneous"
       },
       {
         "id": "button_3_3",
@@ -104,7 +116,8 @@
         "col": 3,
         "text": "Response C",
         "event_name": "RESPONSE_C",
-        "color": "#795548"
+        "color": "#795548",
+        "type": "instantaneous"
       },
       {
         "id": "button_3_4",
@@ -112,7 +125,8 @@
         "col": 4,
         "text": "Response D",
         "event_name": "RESPONSE_D",
-        "color": "#795548"
+        "color": "#795548",
+        "type": "instantaneous"
       },
       {
         "id": "button_3_5",
@@ -120,7 +134,8 @@
         "col": 5,
         "text": "Custom",
         "event_name": "CUSTOM_EVENT",
-        "color": "#E91E63"
+        "color": "#E91E63",
+        "type": "instantaneous"
       }
     ]
   }
