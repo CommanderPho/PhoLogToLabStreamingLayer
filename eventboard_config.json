@@ -1,0 +1,127 @@
+{
+  "eventboard_config": {
+    "title": "Event Board",
+    "buttons": [
+      {
+        "id": "button_1_1",
+        "row": 1,
+        "col": 1,
+        "text": "Start Task",
+        "event_name": "TASK_START",
+        "color": "#4CAF50"
+      },
+      {
+        "id": "button_1_2",
+        "row": 1,
+        "col": 2,
+        "text": "Pause",
+        "event_name": "TASK_PAUSE",
+        "color": "#FF9800"
+      },
+      {
+        "id": "button_1_3",
+        "row": 1,
+        "col": 3,
+        "text": "Resume",
+        "event_name": "TASK_RESUME",
+        "color": "#2196F3"
+      },
+      {
+        "id": "button_1_4",
+        "row": 1,
+        "col": 4,
+        "text": "Stop Task",
+        "event_name": "TASK_STOP",
+        "color": "#F44336"
+      },
+      {
+        "id": "button_1_5",
+        "row": 1,
+        "col": 5,
+        "text": "Error",
+        "event_name": "ERROR_OCCURRED",
+        "color": "#9C27B0"
+      },
+      {
+        "id": "button_2_1",
+        "row": 2,
+        "col": 1,
+        "text": "Question 1",
+        "event_name": "QUESTION_1",
+        "color": "#607D8B"
+      },
+      {
+        "id": "button_2_2",
+        "row": 2,
+        "col": 2,
+        "text": "Question 2",
+        "event_name": "QUESTION_2",
+        "color": "#607D8B"
+      },
+      {
+        "id": "button_2_3",
+        "row": 2,
+        "col": 3,
+        "text": "Question 3",
+        "event_name": "QUESTION_3",
+        "color": "#607D8B"
+      },
+      {
+        "id": "button_2_4",
+        "row": 2,
+        "col": 4,
+        "text": "Question 4",
+        "event_name": "QUESTION_4",
+        "color": "#607D8B"
+      },
+      {
+        "id": "button_2_5",
+        "row": 2,
+        "col": 5,
+        "text": "Question 5",
+        "event_name": "QUESTION_5",
+        "color": "#607D8B"
+      },
+      {
+        "id": "button_3_1",
+        "row": 3,
+        "col": 1,
+        "text": "Response A",
+        "event_name": "RESPONSE_A",
+        "color": "#795548"
+      },
+      {
+        "id": "button_3_2",
+        "row": 3,
+        "col": 2,
+        "text": "Response B",
+        "event_name": "RESPONSE_B",
+        "color": "#795548"
+      },
+      {
+        "id": "button_3_3",
+        "row": 3,
+        "col": 3,
+        "text": "Response C",
+        "event_name": "RESPONSE_C",
+        "color": "#795548"
+      },
+      {
+        "id": "button_3_4",
+        "row": 3,
+        "col": 4,
+        "text": "Response D",
+        "event_name": "RESPONSE_D",
+        "color": "#795548"
+      },
+      {
+        "id": "button_3_5",
+        "row": 3,
+        "col": 5,
+        "text": "Custom",
+        "event_name": "CUSTOM_EVENT",
+        "color": "#E91E63"
+      }
+    ]
+  }
+}
