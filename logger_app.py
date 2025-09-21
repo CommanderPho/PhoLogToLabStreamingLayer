@@ -77,19 +77,59 @@ class LoggerApp:
         self.main_text_timestamp = None
         self.popover_text_timestamp = None
         
+        # EventBoard configuration and outlet
+        self.eventboard_config = None
+        self.eventboard_outlet = None
+        self.eventboard_buttons = {}
+        
+        # Load EventBoard configuration
+        self.load_eventboard_config()
+        
         # Create GUI elements first
         self.setup_gui()
         
         # Check for recovery files
         self.check_for_recovery()
         
-        # Then create LSL outlet
+        # Then create LSL outlets
         self.setup_lsl_outlet()
+        self.setup_eventboard_outlet()
         
         # Setup system tray and global hotkey
         self.setup_system_tray()
         self.setup_global_hotkey()
     
+    def load_eventboard_config(self):
+        """Load EventBoard configuration from file"""
+        config_file = Path("eventboard_config.json")
+        
+        if not config_file.exists():
+            print(f"EventBoard config file not found: {config_file}")
+            print("Using default configuration")
+            self.eventboard_config = self.get_default_eventboard_config()
+            return
+        
+        try:
+            with open(config_file, 'r') as f:
+                config_data = json.load(f)
+                self.eventboard_config = config_data.get('eventboard_config', {})
+                print(f"EventBoard configuration loaded from {config_file}")
+        except Exception as e:
+            print(f"Error loading EventBoard config: {e}")
+            print("Using default configuration")
+            self.eventboard_config = self.get_default_eventboard_config()
+    
+    def get_default_eventboard_config(self):
+        """Get default EventBoard configuration"""
+        return {
+            "title": "Event Board",
+            "buttons": [
+                {"id": f"button_{i}_{j}", "row": i, "col": j, "text": f"Button {i}-{j}", 
+                 "event_name": f"EVENT_{i}_{j}", "color": "#2196F3"}
+                for i in range(1, 4) for j in range(1, 6)
+            ]
+        }
+
     def acquire_singleton_lock(self):
         """Acquire the singleton lock by binding to the port"""
         try:
@@ -174,6 +214,32 @@ class LoggerApp:
             except tk.TclError:
                 pass  # GUI is being destroyed
             self.outlet = None
+    
+    def setup_eventboard_outlet(self):
+        """Create an LSL outlet for EventBoard events"""
+        try:
+            # Create stream info for EventBoard
+            info = pylsl.StreamInfo(
+                name='EventBoard',
+                type='Markers',
+                channel_count=1,
+                nominal_srate=pylsl.IRREGULAR_RATE,
+                channel_format=pylsl.cf_string,
+                source_id='eventboard_001'
+            )
+            
+            # Add some metadata
+            info.desc().append_child_value("manufacturer", "PhoLogToLabStreamingLayer")
+            info.desc().append_child_value("version", "2.0")
+            info.desc().append_child_value("description", "EventBoard button events")
+            
+            # Create outlet
+            self.eventboard_outlet = pylsl.StreamOutlet(info)
+            print("EventBoard LSL outlet created successfully")
+            
+        except Exception as e:
+            print(f"Error creating EventBoard LSL outlet: {e}")
+            self.eventboard_outlet = None
     
     def setup_system_tray(self):
         """Setup system tray icon and menu"""
@@ -475,10 +541,12 @@ class LoggerApp:
         self.minimize_button = ttk.Button(recording_frame, text="Minimize to Tray", command=self.toggle_minimize)
         self.minimize_button.grid(row=0, column=4, padx=5)
         
+        # EventBoard frame
+        self.setup_eventboard_gui(main_frame)
 
         # Text input label and entry frame
         input_frame = ttk.Frame(main_frame)
-        input_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        input_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
         input_frame.columnconfigure(1, weight=1)
         
         ttk.Label(input_frame, text="Message:").grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
@@ -496,15 +564,15 @@ class LoggerApp:
         self.log_button.grid(row=0, column=2)
         
         # Log display area
-        ttk.Label(main_frame, text="Log History:").grid(row=3, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
+        ttk.Label(main_frame, text="Log History:").grid(row=4, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
         
         # Scrolled text widget for log history
         self.log_display = scrolledtext.ScrolledText(main_frame, height=15, width=70)
-        self.log_display.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        self.log_display.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
         
         # Bottom frame for buttons and info
         bottom_frame = ttk.Frame(main_frame)
-        bottom_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E))
+        bottom_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E))
         bottom_frame.columnconfigure(1, weight=1)
         
         # Clear log button
@@ -517,6 +585,81 @@ class LoggerApp:
         # Focus on text entry
         self.text_entry.focus()
     
+    def setup_eventboard_gui(self, parent):
+        """Setup EventBoard GUI with 3x5 grid of buttons"""
+        if not self.eventboard_config:
+            return
+        
+        # EventBoard frame
+        eventboard_frame = ttk.LabelFrame(parent, text=self.eventboard_config.get('title', 'Event Board'), padding="10")
+        eventboard_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        # Configure grid for 3 rows and 5 columns
+        for i in range(3):
+            eventboard_frame.rowconfigure(i, weight=1)
+        for j in range(5):
+            eventboard_frame.columnconfigure(j, weight=1)
+        
+        # Create buttons based on configuration
+        buttons = self.eventboard_config.get('buttons', [])
+        for button_config in buttons:
+            row = button_config.get('row', 1) - 1  # Convert to 0-based indexing
+            col = button_config.get('col', 1) - 1  # Convert to 0-based indexing
+            text = button_config.get('text', 'Button')
+            event_name = button_config.get('event_name', 'UNKNOWN_EVENT')
+            color = button_config.get('color', '#2196F3')
+            button_id = button_config.get('id', f'button_{row}_{col}')
+            
+            # Create button with custom styling
+            button = tk.Button(
+                eventboard_frame,
+                text=text,
+                font=("Arial", 10, "bold"),
+                bg=color,
+                fg="white",
+                relief="raised",
+                bd=2,
+                padx=10,
+                pady=10,
+                command=lambda e=event_name, t=text: self.on_eventboard_button_click(e, t)
+            )
+            
+            button.grid(row=row, column=col, sticky=(tk.W, tk.E, tk.N, tk.S), padx=2, pady=2)
+            
+            # Store button reference
+            self.eventboard_buttons[button_id] = button
+    
+    def on_eventboard_button_click(self, event_name, button_text):
+        """Handle EventBoard button click"""
+        try:
+            # Send LSL event
+            self.send_eventboard_message(event_name, button_text)
+            
+            # Update log display
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log_message = f"EventBoard: {button_text} ({event_name})"
+            self.update_log_display(log_message, timestamp)
+            
+            print(f"EventBoard button clicked: {button_text} -> {event_name}")
+            
+        except Exception as e:
+            print(f"Error handling EventBoard button click: {e}")
+            messagebox.showerror("EventBoard Error", f"Failed to send event: {str(e)}")
+    
+    def send_eventboard_message(self, event_name, button_text):
+        """Send EventBoard message via LSL"""
+        if self.eventboard_outlet:
+            try:
+                # Create event message with timestamp and button info
+                event_message = f"{event_name}|{button_text}|{datetime.now().isoformat()}"
+                self.eventboard_outlet.push_sample([event_message])
+                print(f"EventBoard LSL message sent: {event_message}")
+            except Exception as e:
+                print(f"Error sending EventBoard LSL message: {e}")
+                raise
+        else:
+            print("EventBoard LSL outlet not available")
+            raise Exception("EventBoard LSL outlet not available")
 
     # ---------------------------------------------------------------------------- #
     #                               Recording Methods                              #
@@ -1027,6 +1170,8 @@ class LoggerApp:
             del self.outlet
         if hasattr(self, 'inlet') and self.inlet:
             del self.inlet
+        if hasattr(self, 'eventboard_outlet') and self.eventboard_outlet:
+            del self.eventboard_outlet
         
         # Release singleton lock
         self.release_singleton_lock()
