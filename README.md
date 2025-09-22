@@ -75,6 +75,26 @@ This enhanced version of the LSL Logger App includes system tray functionality a
 - `pyautogui`: Screen positioning
 - `pywin32`: Windows API access
 
+## Icons
+
+The application includes theme-aware icons located in the `icons/` folder:
+
+- **Dark theme icons** (default):
+  - `LogToLabStreamingLayerIcon.png` - Main application icon
+  - `LogToLabStreamingLayerIcon.ico` - Windows icon
+  - `LogToLabStreamingLayerIcon.icns` - macOS icon
+  - `LogToLabStreamingLayerIcon.svg` - Vector icon
+
+- **Light theme icons**:
+  - `LogToLabStreamingLayerIcon_Light.png` - Light theme application icon
+  - `LogToLabStreamingLayerIcon_Light.ico` - Light theme Windows icon
+  - `LogToLabStreamingLayerIcon_Light.icns` - Light theme macOS icon
+
+The application automatically detects your system theme and uses the appropriate icon:
+- **Windows**: Reads the registry to detect dark/light mode
+- **Other systems**: Uses a simple heuristic based on system colors
+- **Fallback**: Defaults to dark theme icons if detection fails
+
 ## Notes
 
 - The global hotkey `Ctrl+Alt+L` works system-wide

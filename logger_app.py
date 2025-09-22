@@ -136,9 +136,12 @@ class LoggerApp:
         }
     
     def setup_app_icon(self):
-        """Setup application icon from PNG file"""
+        """Setup application icon from PNG file based on system theme"""
         try:
-            icon_path = Path("LogToLabStreamingLayerIcon.png")
+            # Detect system theme and choose appropriate icon
+            icon_filename = self.get_theme_appropriate_icon()
+            icon_path = Path("icons") / icon_filename
+            
             if icon_path.exists():
                 # Set window icon
                 self.root.iconphoto(True, tk.PhotoImage(file=str(icon_path)))
@@ -147,6 +150,69 @@ class LoggerApp:
                 print(f"Icon file not found: {icon_path}")
         except Exception as e:
             print(f"Error setting application icon: {e}")
+    
+    def get_theme_appropriate_icon(self):
+        """Get the appropriate icon filename based on system theme"""
+        try:
+            import platform
+            
+            if platform.system() == "Windows":
+                return self.detect_windows_theme()
+            else:
+                # For other systems, use a simple heuristic
+                return self.detect_theme_simple()
+                
+        except Exception as e:
+            print(f"Error detecting theme: {e}")
+            # Fallback to dark icon
+            return "LogToLabStreamingLayerIcon.png"
+    
+    def detect_windows_theme(self):
+        """Detect Windows theme using registry"""
+        try:
+            import winreg
+            
+            # Check Windows 10/11 dark mode setting
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
+                try:
+                    # Check if dark mode is enabled
+                    dark_mode = winreg.QueryValueEx(key, "AppsUseLightTheme")[0]
+                    if dark_mode == 0:  # Dark mode enabled
+                        return "LogToLabStreamingLayerIcon.png"
+                    else:  # Light mode
+                        return "LogToLabStreamingLayerIcon_Light.png"
+                except FileNotFoundError:
+                    # Registry key doesn't exist, fall back to simple detection
+                    return self.detect_theme_simple()
+        except Exception as e:
+            print(f"Error reading Windows theme registry: {e}")
+            return self.detect_theme_simple()
+    
+    def detect_theme_simple(self):
+        """Simple theme detection using tkinter"""
+        try:
+            import tkinter as tk
+            
+            # Create a temporary root to test theme
+            temp_root = tk.Tk()
+            temp_root.withdraw()  # Hide the window
+            
+            try:
+                # Check the default background color
+                bg_color = temp_root.cget('bg')
+                
+                # Simple heuristic: if background is very dark, use light icon
+                if bg_color in ['#2e2e2e', '#3c3c3c', '#404040', 'SystemButtonFace']:
+                    return "LogToLabStreamingLayerIcon.png"
+                else:
+                    return "LogToLabStreamingLayerIcon_Light.png"
+            finally:
+                temp_root.destroy()
+                
+        except Exception as e:
+            print(f"Error in simple theme detection: {e}")
+            # Default to dark icon
+            return "LogToLabStreamingLayerIcon_Light.png"
     
     def parse_time_offset(self, time_str):
         """Parse time offset string (e.g., '5s', '2m', '1h') to seconds"""
@@ -317,9 +383,12 @@ class LoggerApp:
             print(f"Error setting up system tray: {e}")
     
     def create_tray_icon(self):
-        """Create icon for the system tray from PNG file"""
+        """Create icon for the system tray from PNG file based on system theme"""
         try:
-            icon_path = Path("LogToLabStreamingLayerIcon.png")
+            # Use the same theme detection as the main icon
+            icon_filename = self.get_theme_appropriate_icon()
+            icon_path = Path("icons") / icon_filename
+            
             if icon_path.exists():
                 # Load and resize the PNG icon for system tray
                 image = Image.open(str(icon_path))
