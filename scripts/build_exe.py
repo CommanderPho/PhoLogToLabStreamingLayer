@@ -13,7 +13,7 @@ PyInstaller.__main__.run([
     '--onefile',  # Create a single executable file
     '--windowed',  # Hide console window (for GUI apps)
     '--name=PhoLogToLabStreamingLayer',
-    # '--icon=icon.ico',  # Optional: add an icon file
+    '--icon=icons/LogToLabStreamingLayerIcon_Light.ico',  # Optional: add an icon file
     '--add-data=*.py;.',  # Include all Python files
     '--hidden-import=pylsl',
     '--hidden-import=mne',

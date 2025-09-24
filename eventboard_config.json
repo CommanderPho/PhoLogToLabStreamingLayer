@@ -114,8 +114,8 @@
         "id": "button_3_3",
         "row": 3,
         "col": 3,
-        "text": "Response C",
-        "event_name": "RESPONSE_C",
+        "text": "Food",
+        "event_name": "Food",
         "color": "#795548",
         "type": "instantaneous"
       },
@@ -123,18 +123,18 @@
         "id": "button_3_4",
         "row": 3,
         "col": 4,
-        "text": "Response D",
-        "event_name": "RESPONSE_D",
-        "color": "#795548",
+        "text": "Dose 0.5+",
+        "event_name": "DOSE_AMPH_15mg",
+        "color": "#e9a91e",
         "type": "instantaneous"
       },
       {
         "id": "button_3_5",
         "row": 3,
         "col": 5,
-        "text": "Custom",
-        "event_name": "CUSTOM_EVENT",
-        "color": "#E91E63",
+        "text": "Dose 1.0+",
+        "event_name": "DOSE_AMPH_30mg",
+        "color": "#e9a91e",
         "type": "instantaneous"
       }
     ]
