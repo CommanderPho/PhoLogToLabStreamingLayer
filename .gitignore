@@ -2,3 +2,4 @@
 build
 dist
 flutter_version/xdf_files/*.xdf
+**/__pycache__
