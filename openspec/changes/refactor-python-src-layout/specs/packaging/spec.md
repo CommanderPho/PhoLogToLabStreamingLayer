@@ -35,8 +35,6 @@ The PyInstaller spec files SHALL reference the new package/module paths.
 - **THEN** the spec files include the package modules from `src/phologtolabstreaminglayer`
 - **AND** the resulting executables function the same as before
 
-### Requirement: Backward compatibility shim (one release)
-For one release, the repository MAY include a thin `logger_app.py` at the root that defers to the new entry point to reduce breakage.
 
 #### Scenario: Legacy script delegates
 - **WHEN** running `python logger_app.py`
