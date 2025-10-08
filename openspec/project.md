@@ -111,3 +111,14 @@ A minimal but complete logging application that sends timestamped text events to
   - Recording format: Python saves FIF + CSV; Flutter saves JSON (XDF planned)
   - Desktop-only UX: system tray + global hotkey are Python-only
   - Config: `eventboard_config.json` consumed by Python app; Flutter config support to be specified in future changes
+
+## Flutter Parity Status
+- Status: The Flutter app is stale and has not been recently validated. Documentation conflicts exist (JSON vs XDF recording; mock LSL).
+- Parity targets (to match Python where applicable on mobile):
+  - Real LSL via FFI on Android/iOS for `TextLogger` and `EventBoard`
+  - EventBoard UI: 3x5 grid; instantaneous and toggleable buttons; time offset parsing
+  - Message format parity: `EVENT_NAME|BUTTON_TEXT|TIMESTAMP|TOGGLE:<bool>` for toggles
+  - Recording parity: native XDF writer plus real-time CSV export; auto-start; split
+  - Reliability: periodic backup and startup recovery workflow
+  - Configuration: compatible schema with `eventboard_config.json` (or mobile-appropriate equivalent)
+  - Non-goals on mobile: desktop-only system tray and global hotkey
