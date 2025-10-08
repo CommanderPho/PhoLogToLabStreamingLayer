@@ -41,6 +41,7 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
   final LSLService _lslService = LSLService();
   final RecordingService _recordingService = RecordingService();
   final List<LogEntry> _logHistory = [];
+  final ScrollController _logScrollController = ScrollController();
   
   bool _isRecording = false;
   String _lslStatus = 'Initializing...';
@@ -264,6 +265,16 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
         message: message,
         timestamp: DateTime.now(),
       ));
+    });
+    // Ensure the log list scrolls to bottom after new entry is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_logScrollController.hasClients) {
+        _logScrollController.animateTo(
+          _logScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 
@@ -578,6 +589,7 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
                   borderRadius: BorderRadius.circular(4.0),
                 ),
                 child: ListView.builder(
+                  controller: _logScrollController,
                   itemCount: _logHistory.length,
                   itemBuilder: (context, index) {
                     final entry = _logHistory[index];
@@ -609,6 +621,7 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
     _messageFocusNode.dispose();
     _lslService.dispose();
     _recordingService.dispose();
+    _logScrollController.dispose();
     super.dispose();
   }
 }
