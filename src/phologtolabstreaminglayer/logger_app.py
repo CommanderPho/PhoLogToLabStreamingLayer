@@ -999,7 +999,7 @@ class LoggerApp:
             ## already had valid folder, just return it
             return self.xdf_folder
         else:        
-            self.xdf_folder = filedialog.askdirectory(initialdir=str(self.xdf_folder), title="Select output XDF Folder - PhoLogToLabStreamingLayer_logs")
+            self.xdf_folder = Path(filedialog.askdirectory(initialdir=str(self.xdf_folder), title="Select output XDF Folder - PhoLogToLabStreamingLayer_logs")).resolve()
             assert self.xdf_folder.exists(), f"XDF folder does not exist: {self.xdf_folder}"
             assert self.xdf_folder.is_dir(), f"XDF folder is not a directory: {self.xdf_folder}"
             self.update_log_display(f"XDF folder selected: {self.xdf_folder}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
