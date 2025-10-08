@@ -94,3 +94,20 @@ A minimal but complete logging application that sends timestamped text events to
   - Windows registry access for theme detection (optional)
 - Flutter
   - `ffi`, `path_provider`; planned native LSL bindings
+
+## Dual Implementations
+- Python desktop app (root directory)
+  - Target platforms: Windows/macOS/Linux
+  - Real LSL outlets: `TextLogger` and `EventBoard`
+  - File outputs: `.fif` via MNE and `CSV/*_events.csv`
+  - System tray integration and global hotkey (`Ctrl+Alt+L`)
+  - Packaged via PyInstaller (`logger_app.spec`, `PhoLogToLabStreamingLayer.spec`)
+- Flutter app (`flutter_version/logger_app`)
+  - Target platforms: Android/iOS (also runs on desktop during development)
+  - Current status: mock LSL service; JSON-based recordings (see README)
+  - Planned: FFI bindings to liblsl, native XDF compatibility, platform channels
+- Parity notes
+  - LSL transport: Python uses real LSL; Flutter currently mock (parity planned via FFI)
+  - Recording format: Python saves FIF + CSV; Flutter saves JSON (XDF planned)
+  - Desktop-only UX: system tray + global hotkey are Python-only
+  - Config: `eventboard_config.json` consumed by Python app; Flutter config support to be specified in future changes
