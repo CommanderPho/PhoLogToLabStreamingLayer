@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:async';
-import 'dart:convert';
 import 'models/lsl_service.dart';
 import 'models/recording_service.dart';
 import 'models/log_entry.dart';
@@ -155,7 +154,13 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
       message = '${btn.eventName}|${btn.text}|${actualTs.toIso8601String()}';
     }
 
-    await _sendLSLMessage(message);
+    // Send to dedicated EventBoard outlet (real LSL)
+    try {
+      await _lslService.sendEvent(message);
+    } catch (e) {
+      // Fallback: still try to send via TextLogger to avoid data loss
+      await _sendLSLMessage('EventBoardFallback|$message');
+    }
     _addLogEntry('EventBoard: ${btn.text}${btn.type == 'toggleable' ? (_toggleStates[id]! ? ' ON' : ' OFF') : ''} (${btn.eventName}${btn.type == 'toggleable' ? (_toggleStates[id]! ? '_START' : '_END') : ''})${offsetSec > 0 ? ' [offset: -$offsetText]' : ''}');
 
     // Reset offset field placeholder behavior
