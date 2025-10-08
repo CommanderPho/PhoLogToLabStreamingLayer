@@ -39,5 +39,5 @@ if __name__ == "__main__":
     _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
     # _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
     # LoggerApp._default_xdf_folder = _default_xdf_folder
-    assert _default_xdf_folder.exists(), f"XDF folder does not exist: {_default_xdf_folder}"
+    # assert _default_xdf_folder.exists(), f"XDF folder does not exist: {_default_xdf_folder}"
     main(xdf_folder=_default_xdf_folder)
