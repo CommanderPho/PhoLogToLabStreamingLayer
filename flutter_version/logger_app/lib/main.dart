@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'models/lsl_service.dart';
 import 'models/recording_service.dart';
 import 'models/log_entry.dart';
+import 'models/eventboard_config.dart';
 
 void main() {
   runApp(const LoggerApp());
@@ -47,6 +48,9 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
   String _statusInfo = 'Ready';
   String? _currentRecordingFile;
   String? _recordingDirectory;
+  EventBoardConfig? _eventBoardConfig;
+  final Map<String, bool> _toggleStates = {};
+  final Map<String, TextEditingController> _offsetControllers = {};
 
   @override
   void initState() {
@@ -64,6 +68,11 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
       await _lslService.initialize();
       setState(() {
         _lslStatus = 'Connected';
+      });
+      // Load EventBoard configuration
+      final cfg = await EventBoardConfigLoader.load();
+      setState(() {
+        _eventBoardConfig = cfg;
       });
       
       // Auto-start recording after a delay
@@ -105,6 +114,54 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
     } catch (e) {
       _addLogEntry('Auto-start failed: $e');
     }
+  }
+
+  double _parseOffsetSeconds(String raw) {
+    final s = raw.trim().toLowerCase();
+    if (s.isEmpty) return 0;
+    final regex = RegExp(r'^(\d+(?:\.\d+)?)\s*([smh]?)$');
+    final m = regex.firstMatch(s);
+    if (m == null) return 0;
+    final value = double.tryParse(m.group(1)!) ?? 0;
+    final unit = (m.group(2) ?? 's');
+    switch (unit) {
+      case 'm':
+        return value * 60.0;
+      case 'h':
+        return value * 3600.0;
+      default:
+        return value;
+    }
+  }
+
+  Future<void> _emitEventBoard(String id, EventButtonConfig btn) async {
+    final now = DateTime.now();
+    final offsetText = _offsetControllers[id]?.text ?? '';
+    final offsetSec = _parseOffsetSeconds(offsetText);
+    final actualTs = now.subtract(Duration(milliseconds: (offsetSec * 1000).round()));
+
+    String message;
+    if (btn.type == 'toggleable') {
+      final current = _toggleStates[id] ?? false;
+      final next = !current;
+      _toggleStates[id] = next;
+      if (next) {
+        message = '${btn.eventName}_START|${btn.text}|${actualTs.toIso8601String()}|TOGGLE:true';
+      } else {
+        message = '${btn.eventName}_END|${btn.text}|${actualTs.toIso8601String()}|TOGGLE:false';
+      }
+    } else {
+      message = '${btn.eventName}|${btn.text}|${actualTs.toIso8601String()}';
+    }
+
+    await _sendLSLMessage(message);
+    _addLogEntry('EventBoard: ${btn.text}${btn.type == 'toggleable' ? (_toggleStates[id]! ? ' ON' : ' OFF') : ''} (${btn.eventName}${btn.type == 'toggleable' ? (_toggleStates[id]! ? '_START' : '_END') : ''})${offsetSec > 0 ? ' [offset: -$offsetText]' : ''}');
+
+    // Reset offset field placeholder behavior
+    if (_offsetControllers[id] != null && (_offsetControllers[id]!.text).isNotEmpty) {
+      // keep user-entered text; optional: clear after send
+    }
+    setState(() {});
   }
 
   Future<void> _startRecording() async {
@@ -328,6 +385,108 @@ class _LoggerHomePageState extends State<LoggerHomePage> {
             
             const SizedBox(height: 16),
             
+            // EventBoard UI
+            if (_eventBoardConfig != null) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_eventBoardConfig!.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          // Create a 3x5 grid from config
+                          final buttons = _eventBoardConfig!.buttons;
+                          // Initialize controllers/states
+                          for (final b in buttons) {
+                            _toggleStates.putIfAbsent(b.id, () => false);
+                            _offsetControllers.putIfAbsent(b.id, () => TextEditingController(text: '0s'));
+                          }
+                          return Column(
+                            children: List.generate(3, (row) {
+                              final rowButtons = buttons.where((b) => b.row == row + 1).toList()
+                                ..sort((a, b) => a.col.compareTo(b.col));
+                              return Row(
+                                children: List.generate(5, (col) {
+                                  final btn = rowButtons.firstWhere(
+                                    (b) => b.col == col + 1,
+                                    orElse: () => EventButtonConfig(
+                                      id: 'empty_${row}_${col}', row: row + 1, col: col + 1,
+                                      text: '', eventName: 'NONE', colorHex: '#EEEEEE', type: 'instantaneous'),
+                                  );
+                                  final isEmpty = btn.text.isEmpty;
+                                  final color = parseHexColor(btn.colorHex);
+                                  final editable = !isEmpty;
+                                  final controller = _offsetControllers[btn.id]!;
+                                  final isToggle = btn.type == 'toggleable';
+                                  final onState = _toggleStates[btn.id] ?? false;
+                                  return Expanded(
+                                    child: Container(
+                                      margin: const EdgeInsets.all(2),
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: isToggle && onState ? Border.all(color: Colors.red, width: 2) : null,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            flex: 4,
+                                            child: ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: color,
+                                                foregroundColor: Colors.white,
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                              ),
+                                              onPressed: editable ? () => _emitEventBoard(btn.id, btn) : null,
+                                              child: Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: Text(
+                                                  isToggle ? (onState ? '🔴 ${btn.text}' : '🔘 ${btn.text}') : btn.text,
+                                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            flex: 1,
+                                            child: TextField(
+                                              controller: controller,
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                                              decoration: const InputDecoration(
+                                                isDense: true,
+                                                contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                                border: OutlineInputBorder(borderSide: BorderSide.none),
+                                                hintText: '0s',
+                                                hintStyle: TextStyle(color: Colors.white70),
+                                              ),
+                                              onSubmitted: (_) => _emitEventBoard(btn.id, btn),
+                                              enabled: editable,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              );
+                            }),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             // Recording Control
             Card(
               child: Padding(
