@@ -1,3 +1,5 @@
+> Status: SUPERSEDED by `add-flutter-eventboard-parity` and `add-flutter-real-lsl`.
+
 ## Why
 The Flutter app is stale and currently uses a mock LSL service with JSON recording. We need feature parity with the Python app for Android/iOS clients to ensure consistent behavior across platforms.
 
