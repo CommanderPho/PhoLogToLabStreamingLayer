@@ -15,7 +15,6 @@ dependencies = [
     "pyinstaller>=6.14.2",
     "pylsl>=1.17.6",
     "pystray>=0.19.5",
-    "pywin32>=311",
     "pyxdf>=1.17.0",
 ]
 

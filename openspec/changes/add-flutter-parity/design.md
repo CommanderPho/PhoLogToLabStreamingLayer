@@ -48,3 +48,4 @@ The project has a mature Python desktop app with real LSL integration and robust
 - Self-recording inlet necessity on mobile vs relying on local outlets only?
 - Expected recording durations and file sizes (impacting buffering strategy)?
 
+
