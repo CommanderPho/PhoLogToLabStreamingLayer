@@ -992,6 +992,21 @@ class LoggerApp:
             print("EventBoard LSL outlet not available")
             raise Exception("EventBoard LSL outlet not available")
 
+    def user_select_xdf_folder_if_needed(self) -> Path:
+        """Ensures the self.xdf_folder is valid, otherwise forces the user to select a valid one. returns the valid folder.
+        """
+        if (self.xdf_folder is not None) and (self.xdf_folder.exists()) and (self.xdf_folder.is_dir()):
+            ## already had valid folder, just return it
+            return self.xdf_folder
+        else:        
+            self.xdf_folder = filedialog.askdirectory(initialdir=str(self.xdf_folder), title="Select XDF Folder")
+            assert self.xdf_folder.exists(), f"XDF folder does not exist: {self.xdf_folder}"
+            assert self.xdf_folder.is_dir(), f"XDF folder is not a directory: {self.xdf_folder}"
+            self.update_log_display(f"XDF folder selected: {self.xdf_folder}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            print(f"XDF folder selected: {self.xdf_folder}")
+            return self.xdf_folder
+
+
     # ---------------------------------------------------------------------------- #
     #                               Recording Methods                              #
     # ---------------------------------------------------------------------------- #
@@ -1006,8 +1021,10 @@ class LoggerApp:
         default_filename = f"{current_timestamp}_log.xdf"
         
         # Ensure the default directory exists
+        self.xdf_folder = self.user_select_xdf_folder_if_needed()
         self.xdf_folder.mkdir(parents=True, exist_ok=True)
         assert self.xdf_folder.exists(), f"XDF folder does not exist: {self.xdf_folder}"
+        assert self.xdf_folder.is_dir(), f"XDF folder is not a directory: {self.xdf_folder}"
         
         filename = filedialog.asksaveasfilename(
             initialdir=str(self.xdf_folder),
@@ -1057,6 +1074,7 @@ class LoggerApp:
             default_filename = f"{current_timestamp}_log.xdf"
             
             # Ensure the default directory exists
+            self.xdf_folder = self.user_select_xdf_folder_if_needed()
             self.xdf_folder.mkdir(parents=True, exist_ok=True)
             
             # Set filename directly without dialog
@@ -1190,8 +1208,10 @@ class LoggerApp:
             new_filename = f"{current_timestamp}_log.xdf"
             
             # Ensure the default directory exists
+            self.xdf_folder = self.user_select_xdf_folder_if_needed()
             self.xdf_folder.mkdir(parents=True, exist_ok=True)
             assert self.xdf_folder.exists(), f"XDF folder does not exist: {self.xdf_folder}"
+            assert self.xdf_folder.is_dir(), f"XDF folder is not a directory: {self.xdf_folder}"
             
             # Set new filename directly
             self.xdf_filename = str(self.xdf_folder / new_filename)
@@ -1253,6 +1273,7 @@ class LoggerApp:
 
     def check_for_recovery(self):
         """Check for backup files and offer recovery on startup"""
+        self.xdf_folder = self.user_select_xdf_folder_if_needed()
         backup_files = list(self.xdf_folder.glob('*.backup.json'))
         
         if backup_files:
@@ -1269,6 +1290,7 @@ class LoggerApp:
     def recover_from_backup(self, backup_file):
         """Recover data from backup file"""
         try:
+            self.xdf_folder = self.user_select_xdf_folder_if_needed()
             with open(backup_file, 'r') as f:
                 backup_data = json.load(f)
             
