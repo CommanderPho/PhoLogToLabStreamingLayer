@@ -1,0 +1,22 @@
+PODS:
+  - Flutter (1.0.0)
+  - lsl_bindings (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - lsl_bindings (from `.symlinks/plugins/lsl_bindings/ios`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  lsl_bindings:
+    :path: ".symlinks/plugins/lsl_bindings/ios"
+
+SPEC CHECKSUMS:
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  lsl_bindings: 570e4de9c20911992f8515407a92a53af00f542f
+
+PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e
+
+COCOAPODS: 1.16.2
