@@ -1,3 +1,4 @@
+from copy import deepcopy
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 import pylsl
@@ -66,7 +67,8 @@ class LoggerApp:
         self.recording_thread = None
         self.inlet = None
         self.recorded_data = []
-        self.recording_start_time = None
+        self.recording_start_lsl_local_offset = None
+        self.recording_start_datetime = None
         
         # System tray and hotkey state
         self.system_tray = None
@@ -307,7 +309,7 @@ class LoggerApp:
             # Add some metadata
             info.desc().append_child_value("manufacturer", "PhoLogToLabStreamingLayer")
             info.desc().append_child_value("version", "2.0")
-            
+            info.desc().append_child_value("description", "TextLogger user entered text logs events")
             # Create outlet
             self.outlet = pylsl.StreamOutlet(info)
             
@@ -535,15 +537,18 @@ class LoggerApp:
     def get_main_text_timestamp(self):
         """Get the timestamp when user first started typing in main field"""
         if self.main_text_timestamp:
-            timestamp = self.main_text_timestamp
+            ## check if we were previously editing (meaning the self.main_text_timestamp) was set to a previous datetime:
+            timestamp = deepcopy(self.main_text_timestamp)
             self.main_text_timestamp = None  # Reset for next entry
             return timestamp
-        return datetime.now()
+        else:
+            ## otherwise return the current datetime 
+            return datetime.now()
     
     def get_popover_text_timestamp(self):
         """Get the timestamp when user first started typing in popover field"""
         if self.popover_text_timestamp:
-            timestamp = self.popover_text_timestamp
+            timestamp = deepcopy(self.popover_text_timestamp)
             self.popover_text_timestamp = None  # Reset for next entry
             return timestamp
         return datetime.now()
@@ -1017,7 +1022,8 @@ class LoggerApp:
             return
         
         # Create default filename with timestamp
-        current_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.recording_start_datetime = datetime.now()
+        current_timestamp = self.recording_start_datetime.strftime("%Y%m%d_%H%M%S")
         default_filename = f"{current_timestamp}_log.xdf"
         
         # Ensure the default directory exists
@@ -1039,7 +1045,7 @@ class LoggerApp:
         
         self.recording = True
         self.recorded_data = []
-        self.recording_start_time = pylsl.local_clock()
+        self.recording_start_lsl_local_offset = pylsl.local_clock()
         self.xdf_filename = filename
         
         # Create backup file for crash recovery
@@ -1070,7 +1076,8 @@ class LoggerApp:
         
         try:
             # Create default filename with timestamp
-            current_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.recording_start_datetime = datetime.now()
+            current_timestamp = self.recording_start_datetime.strftime("%Y%m%d_%H%M%S")
             default_filename = f"{current_timestamp}_log.xdf"
             
             # Ensure the default directory exists
@@ -1082,7 +1089,7 @@ class LoggerApp:
             
             self.recording = True
             self.recorded_data = []
-            self.recording_start_time = pylsl.local_clock()
+            self.recording_start_lsl_local_offset = pylsl.local_clock()
             
             # Create backup file for crash recovery
             self.backup_filename = str(Path(self.xdf_filename).with_suffix('.backup.json'))
@@ -1204,7 +1211,8 @@ class LoggerApp:
         
         try:
             # Create new filename with timestamp
-            current_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.recording_start_datetime = datetime.now()
+            current_timestamp = self.recording_start_datetime.strftime("%Y%m%d_%H%M%S")
             new_filename = f"{current_timestamp}_log.xdf"
             
             # Ensure the default directory exists
@@ -1218,7 +1226,7 @@ class LoggerApp:
             
             self.recording = True
             self.recorded_data = []
-            self.recording_start_time = pylsl.local_clock()
+            self.recording_start_lsl_local_offset = pylsl.local_clock()
             
             # Create backup file for crash recovery
             self.backup_filename = str(Path(self.xdf_filename).with_suffix('.backup.json'))
@@ -1260,7 +1268,7 @@ class LoggerApp:
         try:
             backup_data = {
                 'recorded_data': self.recorded_data,
-                'recording_start_time': self.recording_start_time,
+                'recording_start_time': self.recording_start_lsl_local_offset,
                 'sample_count': len(self.recorded_data)
             }
             
@@ -1325,7 +1333,11 @@ class LoggerApp:
     #                              Save/Write Methods                              #
     # ---------------------------------------------------------------------------- #
     def save_xdf_file(self):
-        """Save recorded data using MNE"""
+        """Save recorded data using MNE
+        
+        Seems highly incorrect but does load and display kinda reasonably in MNELAB
+        
+        """
         if not self.recorded_data:
             messagebox.showwarning("Warning", "No data to save")
             return
@@ -1480,6 +1492,7 @@ class LoggerApp:
         else:
             print("LSL outlet not available")
     
+
     def update_log_display(self, message, timestamp=None):
         """Update the log display area"""
         # Don't update GUI if app is shutting down
