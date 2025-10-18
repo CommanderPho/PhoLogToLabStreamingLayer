@@ -1438,7 +1438,7 @@ class LoggerApp:
                 
                 for i, (message, lsl_time) in enumerate(zip(messages, timestamps)):
                     # Convert LSL timestamp to readable datetime
-                    readable_time = datetime.fromtimestamp(lsl_time).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                    readable_time = datetime.fromtimestamp(lsl_time).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] ## Sadly this writes datetimes like "1/3/1970  11:35:25 AM", which are completely wrong (both date and time components not even close)
                     writer.writerow([readable_time, lsl_time, message])
                     
         except Exception as e:
@@ -1454,7 +1454,7 @@ class LoggerApp:
             return
         
         # Use the timestamp when user first started typing
-        timestamp = self.get_main_text_timestamp().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = self.get_main_text_timestamp().strftime("%Y-%m-%d %H:%M:%S") # I'm guessing this is wrong too
         
         # Send LSL message
         self.send_lsl_message(message)
@@ -1466,6 +1466,7 @@ class LoggerApp:
         self.text_entry.delete(0, tk.END)
         self.text_entry.focus()
     
+
     def send_lsl_message(self, message):
         """Send message via LSL"""
         if self.outlet:
