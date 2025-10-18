@@ -4,6 +4,7 @@ from tkinter import ttk, scrolledtext, messagebox, filedialog
 import pylsl
 import pyxdf
 from datetime import datetime, timedelta
+import pytz
 import os
 import threading
 import time
@@ -1347,6 +1348,10 @@ class LoggerApp:
             messages = []
             timestamps = []
             
+            recording_start_datetime = deepcopy(self.recording_start_datetime)
+            recording_start_lsl_local_offset = deepcopy(self.recording_start_lsl_local_offset)
+
+
             for data_point in self.recorded_data:
                 message = data_point['sample'][0] if data_point['sample'] else ''
                 timestamp = data_point['timestamp']
@@ -1355,16 +1360,17 @@ class LoggerApp:
             
             # Convert timestamps to relative times (from first sample)
             if timestamps:
-                first_timestamp = timestamps[0]
-                relative_timestamps = [ts - first_timestamp for ts in timestamps]
+                first_timestamp_offset = recording_start_lsl_local_offset # a seocnds offset
+                # first_timestamp_offset = timestamps[0] # a seocnds offset
+                relative_ts_offset_sec = [ts - first_timestamp_offset for ts in timestamps]
             else:
-                relative_timestamps = []
+                relative_ts_offset_sec = []
             
             # Create annotations (MNE's way of handling markers/events)
             # Set orig_time=None to avoid timing conflicts
             annotations = mne.Annotations(
-                onset=relative_timestamps,
-                duration=[0.0] * len(relative_timestamps),  # Instantaneous events
+                onset=relative_ts_offset_sec,
+                duration=[0.0] * len(relative_ts_offset_sec),  # Instantaneous events
                 description=messages,
                 orig_time=None  # This fixes the timing conflict
             )
@@ -1372,7 +1378,7 @@ class LoggerApp:
             # Create a minimal info structure for the markers
             info = mne.create_info(
                 ch_names=['TextLogger_Markers'],
-                sfreq=1000,  # Dummy sampling rate for the minimal channel
+                sfreq=1000, # Dummy sampling rate for the minimal channel, `pylsl.IRREGULAR_RATE` does not work (Error: "Failed to save file: sfreq must be positive")
                 ch_types=['misc']
             )
             
@@ -1380,7 +1386,7 @@ class LoggerApp:
             # We need at least some data points to create a valid Raw object
             if len(timestamps) > 0:
                 # Create dummy data spanning the recording duration
-                duration = relative_timestamps[-1] if relative_timestamps else 1.0
+                duration = relative_ts_offset_sec[-1] if relative_ts_offset_sec else 1.0 # the last timestamp in seconds (recording length) or arbitrarily 1.0 if no samples
                 n_samples = int(duration * 1000) + 1000  # Add buffer
                 dummy_data = np.zeros((1, n_samples))
             else:
@@ -1390,7 +1396,10 @@ class LoggerApp:
             
             # Set measurement date to match the first timestamp
             if timestamps:
-                raw.set_meas_date(timestamps[0])
+                # raw.set_meas_date(timestamps[0])
+                # raw.set_meas_date(recording_start_datetime.astimezone(pytz.timezone("UTC"))) ## this seems better?!, but probably should be None
+                raw.set_meas_date(recording_start_datetime.astimezone(pytz.timezone("UTC")).strftime('%Y-%m-%d %H:%M:%S.%f')) ## this seems better?!, but probably should be None
+                # raw.set_meas_date(None)
             
             raw.set_annotations(annotations)
             
@@ -1424,7 +1433,7 @@ class LoggerApp:
             csv_filename: str = actual_filename.name.replace('.fif', '_events.csv')
             csv_filepath: Path = _default_CSV_folder.joinpath(csv_filename).resolve()
 
-            self.save_events_csv(csv_filepath, messages, timestamps)
+            self.save_events_csv(csv_filepath, messages, timestamps, recording_start_datetime=recording_start_datetime, recording_start_lsl_local_offset=recording_start_lsl_local_offset)
             
             _status_str: str = (f"{file_type} file saved: '{actual_filename}'\n"
                 f"Events CSV saved: '{csv_filepath}'\n"
@@ -1439,19 +1448,28 @@ class LoggerApp:
             traceback.print_exc()
 
 
-    def save_events_csv(self, csv_filename, messages, timestamps):
+    def save_events_csv(self, csv_filename, messages, timestamps, recording_start_datetime: datetime, recording_start_lsl_local_offset: float):
         """Save events as CSV for easy reading"""
         try:
             import csv
             
             with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
-                writer.writerow(['Timestamp', 'LSL_Time', 'Message'])
+                writer.writerow(['Timestamp', 'LSL_Time', 'LSL_Time_Offset', 'Message'])
+
+                initial_lsl_time = recording_start_lsl_local_offset # timestamps[0]
                 
                 for i, (message, lsl_time) in enumerate(zip(messages, timestamps)):
+                    ## compute relative LSL offset:
+                    relative_lsl_time_sec: float = lsl_time - initial_lsl_time
+                    assert (relative_lsl_time_sec >= 0), f"Relative LSL time is negative: {relative_lsl_time_sec}"
+
                     # Convert LSL timestamp to readable datetime
-                    readable_time = datetime.fromtimestamp(lsl_time).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] ## Sadly this writes datetimes like "1/3/1970  11:35:25 AM", which are completely wrong (both date and time components not even close)
-                    writer.writerow([readable_time, lsl_time, message])
+                    readable_datetime: datetime = (recording_start_datetime + timedelta(seconds=relative_lsl_time_sec)).astimezone(pytz.timezone("US/Eastern")) ## using timedelta(seconds=lsl_time) was clearly wrong (off by several days)
+                    readable_datetime_str: str = readable_datetime.strftime("%Y-%m-%d %I:%M:%S.%f %p") ## 12H AM/PM format
+                    # readable_datetime_str = readable_datetime.strftime('%Y-%m-%d %H:%M:%S.%f') ## 24H format
+                    # readable_time = datetime.fromtimestamp(lsl_time).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] ## Sadly this writes datetimes like "1/3/1970  11:35:25 AM", which are completely wrong (both date and time components not even close)
+                    writer.writerow([readable_datetime_str, lsl_time, relative_lsl_time_sec, message])
                     
         except Exception as e:
             print(f"Error saving CSV: {e}")
