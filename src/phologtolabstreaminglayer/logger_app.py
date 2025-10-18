@@ -23,6 +23,17 @@ import sys
 _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
 
 
+def readable_dt_str(a_dt: datetime, tz: pytz.timezone = pytz.timezone("US/Eastern")) -> str:
+    """ returns the datetime in a readible string format """
+    return str(a_dt.astimezone(tz).strftime("%Y-%m-%d %I:%M:%S %p"))
+
+
+def from_readable_dt_str(a_dt_str: str, tz: pytz.timezone = pytz.timezone("US/Eastern")) -> datetime:
+    """ Inverse of `readable_dt_str(...)` """
+    return datetime.strptime(a_dt_str, "%Y-%m-%d %I:%M:%S %p").replace(tzinfo=tz)
+
+
+
 class LoggerApp:
     # Class variable to track if an instance is already running
     _instance_running = False
@@ -83,7 +94,7 @@ class LoggerApp:
         self._shutting_down = False
         
         # Timestamp tracking for text entry
-        self.main_text_timestamp = None
+        self.main_text_start_editing_timestamp = None
         self.popover_text_timestamp = None
         
         # EventBoard configuration and outlet
@@ -93,6 +104,9 @@ class LoggerApp:
         self.eventboard_toggle_states = {}  # Track toggle states
         self.eventboard_time_offsets = {}   # Track time offset dropdowns
         
+        self._common_capture_recording_start_timestamps() ## capture timestamps for use in LSL streams
+
+
         # Load EventBoard configuration
         self.load_eventboard_config()
         
@@ -309,11 +323,24 @@ class LoggerApp:
             
             # Add some metadata
             info.desc().append_child_value("manufacturer", "PhoLogToLabStreamingLayer")
-            info.desc().append_child_value("version", "2.0")
+            info.desc().append_child_value("version", "2.1")
             info.desc().append_child_value("description", "TextLogger user entered text logs events")
+
+
+            ## add a custom timestamp field to the stream info:
+            assert (self.recording_start_lsl_local_offset is not None), f"recording_start_lsl_local_offset is None"
+            # if self.recording_start_lsl_local_offset is not None:
+            info.desc().append_child_value("recording_start_lsl_local_offset_seconds", str(self.recording_start_lsl_local_offset))
+
+            ## add a custom timestamp field to the stream info:
+            assert (self.recording_start_datetime is not None), f"recording_start_datetime is None"
+            # if self.recording_start_datetime is not None:
+            info.desc().append_child_value("recording_start_datetime", readable_dt_str(self.recording_start_datetime))
+
             # Create outlet
             self.outlet = pylsl.StreamOutlet(info)
-            
+
+
             # Update LSL status label safely
             try:
                 if not self._shutting_down:
@@ -332,6 +359,7 @@ class LoggerApp:
                 pass  # GUI is being destroyed
             self.outlet = None
     
+
     def setup_eventboard_outlet(self):
         """Create an LSL outlet for EventBoard events"""
         try:
@@ -347,8 +375,18 @@ class LoggerApp:
             
             # Add some metadata
             info.desc().append_child_value("manufacturer", "PhoLogToLabStreamingLayer")
-            info.desc().append_child_value("version", "2.0")
+            info.desc().append_child_value("version", "2.1")
             info.desc().append_child_value("description", "EventBoard button events")
+
+            ## add a custom timestamp field to the stream info:
+            assert (self.recording_start_lsl_local_offset is not None), f"recording_start_lsl_local_offset is None"
+            # if self.recording_start_lsl_local_offset is not None:
+            info.desc().append_child_value("recording_start_lsl_local_offset_seconds", str(self.recording_start_lsl_local_offset))
+
+            ## add a custom timestamp field to the stream info:
+            assert (self.recording_start_datetime is not None), f"recording_start_datetime is None"
+            # if self.recording_start_datetime is not None:
+            info.desc().append_child_value("recording_start_datetime", readable_dt_str(self.recording_start_datetime))
             
             # Create outlet
             self.eventboard_outlet = pylsl.StreamOutlet(info)
@@ -513,8 +551,8 @@ class LoggerApp:
     
     def on_main_text_change(self, event=None):
         """Track when user first types in main text field"""
-        if self.main_text_timestamp is None:
-            self.main_text_timestamp = datetime.now()
+        if self.main_text_start_editing_timestamp is None:
+            self.main_text_start_editing_timestamp = datetime.now()
     
     def on_popover_text_change(self, event=None):
         """Track when user first types in popover text field"""
@@ -526,7 +564,7 @@ class LoggerApp:
         if event and event.keysym in ['BackSpace', 'Delete']:
             # Check if field is now empty
             if not self.text_entry.get().strip():
-                self.main_text_timestamp = None
+                self.main_text_start_editing_timestamp = None
     
     def on_popover_text_clear(self, event=None):
         """Reset timestamp when popover text field is cleared"""
@@ -537,10 +575,10 @@ class LoggerApp:
     
     def get_main_text_timestamp(self):
         """Get the timestamp when user first started typing in main field"""
-        if self.main_text_timestamp:
+        if self.main_text_start_editing_timestamp:
             ## check if we were previously editing (meaning the self.main_text_timestamp) was set to a previous datetime:
-            timestamp = deepcopy(self.main_text_timestamp)
-            self.main_text_timestamp = None  # Reset for next entry
+            timestamp = deepcopy(self.main_text_start_editing_timestamp)
+            self.main_text_start_editing_timestamp = None  # Reset for next entry
             return timestamp
         else:
             ## otherwise return the current datetime 
@@ -1016,14 +1054,27 @@ class LoggerApp:
     # ---------------------------------------------------------------------------- #
     #                               Recording Methods                              #
     # ---------------------------------------------------------------------------- #
-    def start_recording(self):
-        """Start XDF recording"""
-        if not self.inlet:
-            messagebox.showerror("Error", "No LSL inlet available for recording")
-            return
-        
-        # Create default filename with timestamp
+    def _common_capture_recording_start_timestamps(self):
+        """Common code for capturing recording start timestamps"""
         self.recording_start_datetime = datetime.now()
+        self.recording_start_lsl_local_offset = pylsl.local_clock()
+        return (self.recording_start_datetime, self.recording_start_lsl_local_offset)
+
+    def _common_initiate_recording(self, allow_prompt_user_for_filename: bool = True):
+        """Common code for initiating recording
+        called by `self.start_recording()` and `self.auto_start_recording()`, and also by `self.split_recording()`
+
+        Usage:
+
+            new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=True)
+
+        """
+        ## Capture recording timestamps:
+        self._common_capture_recording_start_timestamps()
+        # self.recording_start_datetime = datetime.now()
+        # self.recording_start_lsl_local_offset = pylsl.local_clock()
+
+        # Create default filename with timestamp
         current_timestamp = self.recording_start_datetime.strftime("%Y%m%d_%H%M%S")
         default_filename = f"{current_timestamp}_log.xdf"
         
@@ -1032,26 +1083,38 @@ class LoggerApp:
         self.xdf_folder.mkdir(parents=True, exist_ok=True)
         assert self.xdf_folder.exists(), f"XDF folder does not exist: {self.xdf_folder}"
         assert self.xdf_folder.is_dir(), f"XDF folder is not a directory: {self.xdf_folder}"
-        
-        filename = filedialog.asksaveasfilename(
-            initialdir=str(self.xdf_folder),
-            initialfile=default_filename,
-            defaultextension=".xdf",
-            filetypes=[("XDF files", "*.xdf"), ("All files", "*.*")],
-            title="Save XDF Recording As"
-        )
-        
+
+
+        # Set new filename directly
+        if allow_prompt_user_for_filename:
+            filename = filedialog.asksaveasfilename(initialdir=str(self.xdf_folder), initialfile=default_filename, defaultextension=".xdf", filetypes=[("XDF files", "*.xdf"), ("All files", "*.*")], title="Save XDF Recording As")
+        else:
+            filename = str(self.xdf_folder / default_filename)
+
         if not filename:
             return
         
         self.recording = True
-        self.recorded_data = []
-        self.recording_start_lsl_local_offset = pylsl.local_clock()
+        self.recorded_data = [] ## clear recorded data
+        
         self.xdf_filename = filename
         
         # Create backup file for crash recovery
         self.backup_filename = str(Path(filename).with_suffix('.backup.json'))
+        return self.xdf_filename, (self.recording_start_datetime, self.recording_start_lsl_local_offset)
+
+
+
+
+    def start_recording(self):
+        """Start XDF recording"""
+        if not self.inlet:
+            messagebox.showerror("Error", "No LSL inlet available for recording")
+            return
         
+        # Create default filename with timestamp
+        new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=True)
+
         # Update GUI
         try:
             if not self._shutting_down:
@@ -1069,6 +1132,7 @@ class LoggerApp:
         
         self.update_log_display("XDF Recording started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
+
     def auto_start_recording(self):
         """Automatically start recording on app launch if inlet is available"""
         if not self.inlet:
@@ -1077,23 +1141,7 @@ class LoggerApp:
         
         try:
             # Create default filename with timestamp
-            self.recording_start_datetime = datetime.now()
-            current_timestamp = self.recording_start_datetime.strftime("%Y%m%d_%H%M%S")
-            default_filename = f"{current_timestamp}_log.xdf"
-            
-            # Ensure the default directory exists
-            self.xdf_folder = self.user_select_xdf_folder_if_needed()
-            self.xdf_folder.mkdir(parents=True, exist_ok=True)
-            
-            # Set filename directly without dialog
-            self.xdf_filename = str(self.xdf_folder / default_filename)
-            
-            self.recording = True
-            self.recorded_data = []
-            self.recording_start_lsl_local_offset = pylsl.local_clock()
-            
-            # Create backup file for crash recovery
-            self.backup_filename = str(Path(self.xdf_filename).with_suffix('.backup.json'))
+            new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=True)
             
             # Update GUI
             try:
@@ -1114,7 +1162,7 @@ class LoggerApp:
             print(f"Auto-started recording to: {self.xdf_filename}")
             
             # Log the auto-start event both in GUI and via LSL
-            auto_start_message = f"RECORDING_AUTO_STARTED: {default_filename}"
+            auto_start_message = f"RECORDING_AUTO_STARTED: {new_filename}"
             self.send_lsl_message(auto_start_message)  # Send via LSL
             self.update_log_display("XDF Recording auto-started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             print(f"Auto-started recording to: {self.xdf_filename}")
@@ -1146,6 +1194,7 @@ class LoggerApp:
             except Exception as e:
                 print(f"Error in recording worker: {e}")
                 break
+
 
     def stop_recording(self):
         """Stop XDF recording and save file"""
@@ -1212,25 +1261,8 @@ class LoggerApp:
         
         try:
             # Create new filename with timestamp
-            self.recording_start_datetime = datetime.now()
-            current_timestamp = self.recording_start_datetime.strftime("%Y%m%d_%H%M%S")
-            new_filename = f"{current_timestamp}_log.xdf"
-            
-            # Ensure the default directory exists
-            self.xdf_folder = self.user_select_xdf_folder_if_needed()
-            self.xdf_folder.mkdir(parents=True, exist_ok=True)
-            assert self.xdf_folder.exists(), f"XDF folder does not exist: {self.xdf_folder}"
-            assert self.xdf_folder.is_dir(), f"XDF folder is not a directory: {self.xdf_folder}"
-            
             # Set new filename directly
-            self.xdf_filename = str(self.xdf_folder / new_filename)
-            
-            self.recording = True
-            self.recorded_data = []
-            self.recording_start_lsl_local_offset = pylsl.local_clock()
-            
-            # Create backup file for crash recovery
-            self.backup_filename = str(Path(self.xdf_filename).with_suffix('.backup.json'))
+            new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=False)
             
             # Update GUI
             try:
@@ -1338,6 +1370,8 @@ class LoggerApp:
         
         Seems highly incorrect but does load and display kinda reasonably in MNELAB
         
+        Also calls `self.save_events_csv(...)` to export CSVs, and this DOES work and outputs the correct timestamps as of 2025-10-18.
+
         """
         if not self.recorded_data:
             messagebox.showwarning("Warning", "No data to save")
