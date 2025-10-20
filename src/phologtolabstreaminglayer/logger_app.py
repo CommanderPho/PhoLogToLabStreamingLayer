@@ -18,23 +18,14 @@ from PIL import Image, ImageDraw
 import keyboard
 import socket
 import sys
+from phopylslhelper.easy_time_sync import EasyTimeSyncParsingMixin, readable_dt_str, from_readable_dt_str
+
 
 # _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
 _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
 
 
-def readable_dt_str(a_dt: datetime, tz: pytz.timezone = pytz.timezone("US/Eastern")) -> str:
-    """ returns the datetime in a readible string format """
-    return str(a_dt.astimezone(tz).strftime("%Y-%m-%d %I:%M:%S %p"))
-
-
-def from_readable_dt_str(a_dt_str: str, tz: pytz.timezone = pytz.timezone("US/Eastern")) -> datetime:
-    """ Inverse of `readable_dt_str(...)` """
-    return datetime.strptime(a_dt_str, "%Y-%m-%d %I:%M:%S %p").replace(tzinfo=tz)
-
-
-
-class LoggerApp:
+class LoggerApp(EasyTimeSyncParsingMixin):
     # Class variable to track if an instance is already running
     _instance_running = False
     _lock_port = 12345  # Port to use for singleton check
@@ -79,9 +70,11 @@ class LoggerApp:
         self.recording_thread = None
         self.inlet = None
         self.recorded_data = []
-        self.recording_start_lsl_local_offset = None
-        self.recording_start_datetime = None
-        
+        # self.recording_start_lsl_local_offset = None
+        # self.recording_start_datetime = None
+
+        self.init_EasyTimeSyncParsingMixin()
+                
         # System tray and hotkey state
         self.system_tray = None
         self.hotkey_popover = None
@@ -104,7 +97,8 @@ class LoggerApp:
         self.eventboard_toggle_states = {}  # Track toggle states
         self.eventboard_time_offsets = {}   # Track time offset dropdowns
         
-        self._common_capture_recording_start_timestamps() ## capture timestamps for use in LSL streams
+        self.capture_stream_start_timestamps() ## `EasyTimeSyncParsingMixin`: capture timestamps for use in LSL streams
+        self.capture_recording_start_timestamps() ## capture timestamps for use in LSL streams
 
 
         # Load EventBoard configuration
@@ -328,18 +322,10 @@ class LoggerApp:
 
 
             ## add a custom timestamp field to the stream info:
-            assert (self.recording_start_lsl_local_offset is not None), f"recording_start_lsl_local_offset is None"
-            # if self.recording_start_lsl_local_offset is not None:
-            info.desc().append_child_value("recording_start_lsl_local_offset_seconds", str(self.recording_start_lsl_local_offset))
-
-            ## add a custom timestamp field to the stream info:
-            assert (self.recording_start_datetime is not None), f"recording_start_datetime is None"
-            # if self.recording_start_datetime is not None:
-            info.desc().append_child_value("recording_start_datetime", readable_dt_str(self.recording_start_datetime))
+            info = self.EasyTimeSyncParsingMixin_add_lsl_outlet_info(info=info)
 
             # Create outlet
             self.outlet = pylsl.StreamOutlet(info)
-
 
             # Update LSL status label safely
             try:
@@ -379,14 +365,16 @@ class LoggerApp:
             info.desc().append_child_value("description", "EventBoard button events")
 
             ## add a custom timestamp field to the stream info:
-            assert (self.recording_start_lsl_local_offset is not None), f"recording_start_lsl_local_offset is None"
-            # if self.recording_start_lsl_local_offset is not None:
-            info.desc().append_child_value("recording_start_lsl_local_offset_seconds", str(self.recording_start_lsl_local_offset))
+            info = self.EasyTimeSyncParsingMixin_add_lsl_outlet_info(info=info)
+            
+            # assert (self.recording_start_lsl_local_offset is not None), f"recording_start_lsl_local_offset is None"
+            # # if self.recording_start_lsl_local_offset is not None:
+            # info.desc().append_child_value("recording_start_lsl_local_offset_seconds", str(self.recording_start_lsl_local_offset))
 
-            ## add a custom timestamp field to the stream info:
-            assert (self.recording_start_datetime is not None), f"recording_start_datetime is None"
-            # if self.recording_start_datetime is not None:
-            info.desc().append_child_value("recording_start_datetime", readable_dt_str(self.recording_start_datetime))
+            # ## add a custom timestamp field to the stream info:
+            # assert (self.recording_start_datetime is not None), f"recording_start_datetime is None"
+            # # if self.recording_start_datetime is not None:
+            # info.desc().append_child_value("recording_start_datetime", readable_dt_str(self.recording_start_datetime))
             
             # Create outlet
             self.eventboard_outlet = pylsl.StreamOutlet(info)
@@ -1056,9 +1044,12 @@ class LoggerApp:
     # ---------------------------------------------------------------------------- #
     def _common_capture_recording_start_timestamps(self):
         """Common code for capturing recording start timestamps"""
-        self.recording_start_datetime = datetime.now()
-        self.recording_start_lsl_local_offset = pylsl.local_clock()
+        # self.recording_start_datetime = datetime.now()
+        # self.recording_start_datetime = datetime.now(datetime.timezone.utc)
+        # self.recording_start_lsl_local_offset = pylsl.local_clock()        
+        self.capture_recording_start_timestamps()
         return (self.recording_start_datetime, self.recording_start_lsl_local_offset)
+
 
     def _common_initiate_recording(self, allow_prompt_user_for_filename: bool = True):
         """Common code for initiating recording
@@ -1071,9 +1062,7 @@ class LoggerApp:
         """
         ## Capture recording timestamps:
         self._common_capture_recording_start_timestamps()
-        # self.recording_start_datetime = datetime.now()
-        # self.recording_start_lsl_local_offset = pylsl.local_clock()
-
+    
         # Create default filename with timestamp
         current_timestamp = self.recording_start_datetime.strftime("%Y%m%d_%H%M%S")
         default_filename = f"{current_timestamp}_log.xdf"
@@ -1083,7 +1072,6 @@ class LoggerApp:
         self.xdf_folder.mkdir(parents=True, exist_ok=True)
         assert self.xdf_folder.exists(), f"XDF folder does not exist: {self.xdf_folder}"
         assert self.xdf_folder.is_dir(), f"XDF folder is not a directory: {self.xdf_folder}"
-
 
         # Set new filename directly
         if allow_prompt_user_for_filename:
