@@ -18,11 +18,12 @@ from PIL import Image, ImageDraw
 import keyboard
 import socket
 import sys
-from phopylslhelper.easy_time_sync import EasyTimeSyncParsingMixin, readable_dt_str, from_readable_dt_str
+from phopylslhelper.general_helpers import unwrap_single_element_listlike_if_needed, readable_dt_str, from_readable_dt_str, localize_datetime_to_timezone, tz_UTC, tz_Eastern, _default_tz
+from phopylslhelper.easy_time_sync import EasyTimeSyncParsingMixin
 
 
-# _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
-_default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
+_default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
+# _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
 
 
 class LoggerApp(EasyTimeSyncParsingMixin):
@@ -118,6 +119,7 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         self.setup_system_tray()
         self.setup_global_hotkey()
     
+
     def load_eventboard_config(self):
         """Load EventBoard configuration from file"""
         config_file = Path("eventboard_config.json")
@@ -1024,6 +1026,7 @@ class LoggerApp(EasyTimeSyncParsingMixin):
             print("EventBoard LSL outlet not available")
             raise Exception("EventBoard LSL outlet not available")
 
+
     def user_select_xdf_folder_if_needed(self) -> Path:
         """Ensures the self.xdf_folder is valid, otherwise forces the user to select a valid one. returns the valid folder.
         """
@@ -1110,7 +1113,7 @@ class LoggerApp(EasyTimeSyncParsingMixin):
                 self.start_recording_button.config(state="disabled")
                 self.stop_recording_button.config(state="normal")
                 self.split_recording_button.config(state="normal")  # Enable split button
-                self.status_info_label.config(text=f"Recording to: {os.path.basename(filename)}")
+                self.status_info_label.config(text=f"Recording to: {os.path.basename(new_filename)}")
         except tk.TclError:
             pass  # GUI is being destroyed
         

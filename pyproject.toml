@@ -39,4 +39,4 @@ dev-dependencies = [
 ]
 
 [tool.uv.sources]
-phopylslhelper = { git = "https://github.com/CommanderPho/phopylslhelper.git" }
+phopylslhelper = { path = "../LSL_REPOS/LSL/PhoPyLSLhelper", editable = true }
