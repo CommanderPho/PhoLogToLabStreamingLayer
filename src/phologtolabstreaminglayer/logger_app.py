@@ -20,7 +20,7 @@ import socket
 import sys
 from phopylslhelper.general_helpers import unwrap_single_element_listlike_if_needed, readable_dt_str, from_readable_dt_str, localize_datetime_to_timezone, tz_UTC, tz_Eastern, _default_tz
 from phopylslhelper.easy_time_sync import EasyTimeSyncParsingMixin
-
+from whisper_timestamped.mixins.live_whisper_transcription import LiveWhisperTranscriptionAppMixin
 
 program_lock_port = int(os.environ.get("LIVE_WHISPER_LOCK_PORT", 13372))
 
@@ -29,7 +29,7 @@ _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLog
 # _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
 
 
-class LoggerApp(EasyTimeSyncParsingMixin):
+class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
     # Class variable to track if an instance is already running
     _instance_running = False
     _lock_port = program_lock_port  # Port to use for singleton check
@@ -78,7 +78,9 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         # self.recording_start_datetime = None
 
         self.init_EasyTimeSyncParsingMixin()
-                
+        # Live transcription state
+        self.init_LiveWhisperTranscriptionAppMixin()
+
         # System tray and hotkey state
         self.system_tray = None
         self.hotkey_popover = None
@@ -331,6 +333,9 @@ class LoggerApp(EasyTimeSyncParsingMixin):
 
             # Create outlet
             self.outlet = pylsl.StreamOutlet(info)
+
+            self.setup_lsl_outlet_LiveWhisperTranscriptionAppMixin()
+
 
             # Update LSL status label safely
             try:
@@ -712,12 +717,17 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         self.minimize_button = ttk.Button(recording_frame, text="Minimize to Tray", command=self.toggle_minimize)
         self.minimize_button.grid(row=0, column=4, padx=5)
         
-        # EventBoard frame
-        self.setup_eventboard_gui(main_frame)
+        # Live Transcription control frame
+        self.setup_gui_LiveWhisperTranscriptionAppMixin(main_frame, row=2)
 
+        # EventBoard frame
+        self.setup_eventboard_gui(main_frame, row=3)
+
+        next_row: int = 4
         # Text input label and entry frame
         input_frame = ttk.Frame(main_frame)
-        input_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        input_frame.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        next_row = next_row + 1
         input_frame.columnconfigure(1, weight=1)
         
         ttk.Label(input_frame, text="Message:").grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
@@ -735,15 +745,18 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         self.log_button.grid(row=0, column=2)
         
         # Log display area
-        ttk.Label(main_frame, text="Log History:").grid(row=4, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
+        ttk.Label(main_frame, text="Log History:").grid(row=next_row, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
+        next_row = next_row + 1
         
         # Scrolled text widget for log history
         self.log_display = scrolledtext.ScrolledText(main_frame, height=15, width=70)
-        self.log_display.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
-        
+        self.log_display.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        next_row = next_row + 1
+
         # Bottom frame for buttons and info
         bottom_frame = ttk.Frame(main_frame)
-        bottom_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E))
+        bottom_frame.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E))
+        next_row = next_row + 1
         bottom_frame.columnconfigure(1, weight=1)
         
         # Clear log button
@@ -756,14 +769,14 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         # Focus on text entry
         self.text_entry.focus()
     
-    def setup_eventboard_gui(self, parent):
+    def setup_eventboard_gui(self, parent, row: int=2):
         """Setup EventBoard GUI with 3x5 grid of buttons and time offset dropdowns"""
         if not self.eventboard_config:
             return
         
         # EventBoard frame
         eventboard_frame = ttk.LabelFrame(parent, text=self.eventboard_config.get('title', 'Event Board'), padding="10")
-        eventboard_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        eventboard_frame.grid(row=row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
         
         # Configure grid for 3 rows and 5 columns (each cell has button + dropdown)
         for i in range(3):
