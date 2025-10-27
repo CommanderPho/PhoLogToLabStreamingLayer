@@ -22,6 +22,9 @@ from phopylslhelper.general_helpers import unwrap_single_element_listlike_if_nee
 from phopylslhelper.easy_time_sync import EasyTimeSyncParsingMixin
 
 
+program_lock_port = int(os.environ.get("LIVE_WHISPER_LOCK_PORT", 13372))
+
+
 _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
 # _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
 
@@ -29,7 +32,7 @@ _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLog
 class LoggerApp(EasyTimeSyncParsingMixin):
     # Class variable to track if an instance is already running
     _instance_running = False
-    _lock_port = 12345  # Port to use for singleton check
+    _lock_port = program_lock_port  # Port to use for singleton check
     # _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
     xdf_folder: Path = None # Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
     
