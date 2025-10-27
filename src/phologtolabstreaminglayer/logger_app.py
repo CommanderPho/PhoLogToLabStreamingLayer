@@ -1,3 +1,4 @@
+from typing import Dict, List, Tuple, Optional, Callable, Union, Any
 from copy import deepcopy
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
@@ -63,8 +64,10 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
     def __init__(self, root, xdf_folder=None):
         self.root = root
         self.root.title("LSL Logger with XDF Recording")
-        self.root.geometry("600x500")
+        self.root.geometry("700x550")
         
+        self.stream_names = ['TextLogger', 'EventBoard', 'WhisperLiveLogger'] # : List[str]
+
         # Set application icon
         self.setup_app_icon()
         self.xdf_folder = (xdf_folder or _default_xdf_folder)
@@ -72,7 +75,10 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
         # Recording state
         self.recording = False
         self.recording_thread = None
-        self.inlet = None
+        # self.inlet = None
+        self.inlets = {}
+        self.outlets = {}
+
         self.recorded_data = []
         # self.recording_start_lsl_local_offset = None
         # self.recording_start_datetime = None
@@ -106,7 +112,6 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
         self.capture_stream_start_timestamps() ## `EasyTimeSyncParsingMixin`: capture timestamps for use in LSL streams
         self.capture_recording_start_timestamps() ## capture timestamps for use in LSL streams
 
-
         # Load EventBoard configuration
         self.load_eventboard_config()
         
@@ -118,12 +123,38 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
         
         # Then create LSL outlets
         self.setup_lsl_outlet()
-        self.setup_eventboard_outlet()
-        
+
+        ## setup transcirption
+        # self.root.after(200, self.auto_start_live_transcription)
+
+
         # Setup system tray and global hotkey
         self.setup_system_tray()
         self.setup_global_hotkey()
-    
+
+    @property
+    def eventboard_outlet(self) -> Optional[pylsl.StreamOutlet]:
+        """The eventboard_outlet property."""
+        return self.outlets['EventBoard']
+    @eventboard_outlet.setter
+    def eventboard_outlet(self, value):
+        self.outlets['EventBoard'] = value    
+
+    @property
+    def outlet_TextLogger(self) -> Optional[pylsl.StreamOutlet]:
+        """The outlet_TextLogger property."""
+        return self.outlets['TextLogger']
+    @outlet_TextLogger.setter
+    def outlet_TextLogger(self, value):
+        self.outlets['TextLogger'] = value
+
+    @property
+    def has_any_inlets(self) -> bool:
+        """The has_any_inlets property."""
+        return (self.inlets is not None) and (len(self.inlets) > 0)
+
+
+
 
     def load_eventboard_config(self):
         """Load EventBoard configuration from file"""
@@ -287,29 +318,97 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
         except Exception as e:
             print(f"Error releasing singleton lock: {e}")
     
-    def setup_recording_inlet(self):
-        """Setup inlet to record our own stream"""
-        try:
-            # Look for our own stream
-            streams = pylsl.resolve_byprop('name', 'TextLogger', timeout=2.0)
-            if streams:
-                self.inlet = pylsl.StreamInlet(streams[0])
-                print("Recording inlet created successfully")
-                
-                # Auto-start recording after inlet is ready
-                self.root.after(500, self.auto_start_recording)
-                
-            else:
-                print("Could not find TextLogger stream for recording")
-                self.inlet = None
-        except Exception as e:
-            print(f"Error creating recording inlet: {e}")
-            self.inlet = None
+
+
+
+
     # ---------------------------------------------------------------------------- #
     #                               Recording Methods                              #
     # ---------------------------------------------------------------------------- #
 
+    def setup_recording_inlet(self):
+        """Setup inlet to record our own stream
+
+        Modifies: self.inlets
+
+        """
+
+        # self.inlets = {}
+
+        stream_names: List[str] = self.stream_names # ['TextLogger', 'EventBoard', 'WhisperLiveLogger']
+        were_any_success: bool = False
+        for a_stream_name in stream_names:
+            should_remove_stream: bool = False
+            try:
+                # Look for our own stream
+                found_streams = pylsl.resolve_byprop('name', a_stream_name, timeout=2.0)
+                if found_streams:
+                    self.inlets[a_stream_name] = pylsl.StreamInlet(found_streams[0])
+                    print("Recording inlet created successfully")
+                    were_any_success = True                        
+                else:
+                    print(f"Could not find '{a_stream_name}' stream for recording")
+                    should_remove_stream = True
+
+            except Exception as e:
+                print(f"Error creating recording inlet for stream named '{a_stream_name}': {e}")
+                should_remove_stream = True
+
+            if (a_stream_name in self.inlets) and should_remove_stream:
+                _a_removed_stream = self.inlets.pop(a_stream_name)
+                if _a_removed_stream is not None:
+                    print(f'WARN: removed stream named "{a_stream_name}" from self.inlets.')
+
+        ## END for a_stream_name in stream_names...
+        if were_any_success:
+            # Auto-start recording after inlet is ready
+            self.root.after(500, self.auto_start_recording)
+
+
+
+
     def setup_lsl_outlet(self):
+        """Create an LSL outlet for sending messages
+
+        Modifies: self.inlets
+
+        """
+        stream_setup_fn_dict: Dict = {
+            'TextLogger': self.setup_TextLogger_outlet(),
+            'EventBoard': self.setup_eventboard_outlet(),
+            'WhisperLiveLogger': self.setup_lsl_outlet_LiveWhisperTranscriptionAppMixin(),
+        }
+        were_any_success: bool = False
+        for a_stream_name, a_setup_fn in stream_setup_fn_dict.items():
+            try:
+                # Create stream info
+                a_setup_fn() ## just setup
+                were_any_success = True
+            
+                # Update LSL status label safely
+                try:
+                    if not self._shutting_down:
+                        self.lsl_status_label.config(text=f"LSL Status: Connected - {a_stream_name}", foreground="green")
+                except tk.TclError:
+                    pass  # GUI is being destroyed
+                
+                
+            except Exception as e:
+                try:
+                    if not self._shutting_down:
+                        self.lsl_status_label.config(text=f"LSL Status: Error - {a_stream_name} - {str(e)}", foreground="red")
+                except tk.TclError:
+                    pass  # GUI is being destroyed
+
+        ## END for a_stream_name, a_setup_fn in stream_setup_fn_dict...
+
+        if were_any_success:
+            # Setup inlet for recording our own stream (with delay to allow outlet to be discovered)
+            self.root.after(1000, self.setup_recording_inlet)
+   
+        
+
+    def setup_TextLogger_outlet(self):
         """Create an LSL outlet for sending messages"""
         try:
             # Create stream info
@@ -327,34 +426,22 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
             info.desc().append_child_value("version", "2.1")
             info.desc().append_child_value("description", "TextLogger user entered text logs events")
 
-
             ## add a custom timestamp field to the stream info:
             info = self.EasyTimeSyncParsingMixin_add_lsl_outlet_info(info=info)
 
             # Create outlet
-            self.outlet = pylsl.StreamOutlet(info)
+            self.outlet_TextLogger = pylsl.StreamOutlet(info)
+            print("TextLogger LSL outlet created successfully")
 
-            self.setup_lsl_outlet_LiveWhisperTranscriptionAppMixin()
-
-
-            # Update LSL status label safely
-            try:
-                if not self._shutting_down:
-                    self.lsl_status_label.config(text="LSL Status: Connected", foreground="green")
-            except tk.TclError:
-                pass  # GUI is being destroyed
-            
-            # Setup inlet for recording our own stream (with delay to allow outlet to be discovered)
-            self.root.after(1000, self.setup_recording_inlet)
-            
         except Exception as e:
+            print(f"Error creating TextLogger LSL outlet: {e}")
+            self.outlet_TextLogger = None
             try:
                 if not self._shutting_down:
                     self.lsl_status_label.config(text=f"LSL Status: Error - {str(e)}", foreground="red")
             except tk.TclError:
                 pass  # GUI is being destroyed
-            self.outlet = None
-    
+            
 
     def setup_eventboard_outlet(self):
         """Create an LSL outlet for EventBoard events"""
@@ -387,13 +474,17 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
             # info.desc().append_child_value("recording_start_datetime", readable_dt_str(self.recording_start_datetime))
             
             # Create outlet
-            self.eventboard_outlet = pylsl.StreamOutlet(info)
+            self.outlets['EventBoard'] = pylsl.StreamOutlet(info)
             print("EventBoard LSL outlet created successfully")
             
         except Exception as e:
             print(f"Error creating EventBoard LSL outlet: {e}")
-            self.eventboard_outlet = None
+            self.outlets['EventBoard'] = None
     
+
+    # ==================================================================================================================================================================================================================================================================================== #
+    # Other GUI/Status Methods                                                                                                                                                                                                                                                             #
+    # ==================================================================================================================================================================================================================================================================================== #
     def setup_system_tray(self):
         """Setup system tray icon and menu"""
         try:
@@ -1126,7 +1217,7 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
 
     def start_recording(self):
         """Start XDF recording"""
-        if not self.inlet:
+        if not self.has_any_inlets:
             messagebox.showerror("Error", "No LSL inlet available for recording")
             return
         
@@ -1153,7 +1244,7 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
 
     def auto_start_recording(self):
         """Automatically start recording on app launch if inlet is available"""
-        if not self.inlet:
+        if not self.has_any_inlets:
             print("Cannot auto-start recording: no inlet available")
             return
         
@@ -1194,24 +1285,51 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
         """Background thread for recording LSL data with incremental backup"""
         sample_count = 0
         
-        while self.recording and self.inlet:
-            try:
-                sample, timestamp = self.inlet.pull_sample(timeout=1.0)
-                if sample:
-                    data_point = {
-                        'sample': sample,
-                        'timestamp': timestamp
-                    }
-                    self.recorded_data.append(data_point)
-                    sample_count += 1
-                    
-                    # Auto-save every 10 samples to backup file
-                    if sample_count % 10 == 0:
-                        self.save_backup()
+        while self.recording and self.has_any_inlets:
+            ## loop through streams
+            should_save_backup: bool = False
+            for a_stream_name, an_inlet in self.inlets.items():
+                try:
+                    sample, timestamp = an_inlet.pull_sample(timeout=1.0)
+                    if sample:
+                        data_point = {
+                            'sample': sample,
+                            'timestamp': timestamp,
+                            'stream_name': a_stream_name,
+                        }
+                        self.recorded_data.append(data_point)
+                        sample_count += 1
                         
-            except Exception as e:
-                print(f"Error in recording worker: {e}")
-                break
+                        # Auto-save every 10 samples to backup file
+                        if sample_count % 10 == 0:
+                            should_save_backup = True
+                                    
+                except Exception as e:
+                    print(f"Error in recording worker: {e}")
+                    break
+
+            ## END for a_stream_name, a_setup_fn in stream_setup_fn_dict...
+            if should_save_backup:
+                self.save_backup()
+
+            # ## single:
+            # try:
+            #     sample, timestamp = self.inlet.pull_sample(timeout=1.0)
+            #     if sample:
+            #         data_point = {
+            #             'sample': sample,
+            #             'timestamp': timestamp
+            #         }
+            #         self.recorded_data.append(data_point)
+            #         sample_count += 1
+                    
+            #         # Auto-save every 10 samples to backup file
+            #         if sample_count % 10 == 0:
+            #             self.save_backup()
+                        
+            # except Exception as e:
+            #     print(f"Error in recording worker: {e}")
+            #     break
 
 
     def stop_recording(self):
@@ -1273,7 +1391,7 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
 
     def start_new_split_recording(self):
         """Start new recording after split"""
-        if not self.inlet:
+        if not self.has_any_inlets:
             print("Cannot split recording: no inlet available")
             return
         
@@ -1551,10 +1669,10 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
 
     def send_lsl_message(self, message):
         """Send message via LSL"""
-        if self.outlet:
+        if self.outlet_TextLogger:
             try:
                 # Send message with timestamp
-                self.outlet.push_sample([message])
+                self.outlet_TextLogger.push_sample([message])
                 print(f"LSL message sent: {message}")
             except Exception as e:
                 print(f"Error sending LSL message: {e}")
@@ -1590,6 +1708,10 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
         # Set shutdown flag to prevent GUI updates
         self._shutting_down = True
         
+        # Stop transcription if active
+        if self.transcription_active:
+            self.stop_live_transcription()
+
         # Stop recording if active
         if self.recording:
             self.stop_recording()
@@ -1605,13 +1727,23 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
             self.system_tray.stop()
         
         # Clean up LSL resources
-        if hasattr(self, 'outlet') and self.outlet:
-            del self.outlet
-        if hasattr(self, 'inlet') and self.inlet:
-            del self.inlet
-        if hasattr(self, 'eventboard_outlet') and self.eventboard_outlet:
-            del self.eventboard_outlet
-        
+
+        if hasattr(self, 'outlets') and self.outlets:
+            # for an_outlet_name, an_outlet in self.outlets:
+            outlet_names: List[str] = list(self.outlets.keys())
+            for an_outlet_name in outlet_names:
+                self.outlets.pop(an_outlet_name)
+            self.outlets = None
+            del self.outlets
+
+        if hasattr(self, 'inlets') and self.inlets:
+            a_names: List[str] = list(self.inlets.keys())
+            for a_name in a_names:
+                self.inlets.pop(a_name)
+            self.inlets = None
+            del self.inlets
+
+
         # Release singleton lock
         self.release_singleton_lock()
         
