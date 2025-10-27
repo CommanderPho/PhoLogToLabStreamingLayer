@@ -1046,11 +1046,22 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
     def user_select_xdf_folder_if_needed(self) -> Path:
         """Ensures the self.xdf_folder is valid, otherwise forces the user to select a valid one. returns the valid folder.
         """
+        print(f'user_select_xdf_folder_if_needed(): self.xdf_folder: "{self.xdf_folder}", type: {type(self.xdf_folder)}\n\tself.xdf_folder.exists(): {self.xdf_folder.exists()}\n\t_default_xdf_folder.is_dir(): {_default_xdf_folder.is_dir()}')
+        if (self.xdf_folder is not None) and isinstance(self.xdf_folder, str):
+            self.xdf_folder = Path(self.xdf_folder).resolve()
+        print(f'(self.xdf_folder is not None) and (self.xdf_folder.exists()) and (self.xdf_folder.is_dir()): {(self.xdf_folder is not None) and (self.xdf_folder.exists()) and (self.xdf_folder.is_dir())}')
         if (self.xdf_folder is not None) and (self.xdf_folder.exists()) and (self.xdf_folder.is_dir()):
             ## already had valid folder, just return it
             return self.xdf_folder
-        else:        
-            self.xdf_folder = Path(filedialog.askdirectory(initialdir=str(self.xdf_folder), title="Select output XDF Folder - PhoLogToLabStreamingLayer_logs")).resolve()
+        else:
+            ## try to get the default first
+            if (_default_xdf_folder is not None) and (_default_xdf_folder.exists()) and (_default_xdf_folder.is_dir()):
+                self.xdf_folder = _default_xdf_folder
+            else:
+                ## prompt user with GUI:
+                print(f'_default_xdf_folder: "{_default_xdf_folder.as_posix()}"')
+                self.xdf_folder = Path(filedialog.askdirectory(initialdir=str(self.xdf_folder), title="Select output XDF Folder - PhoLogToLabStreamingLayer_logs")).resolve()
+
             assert self.xdf_folder.exists(), f"XDF folder does not exist: {self.xdf_folder}"
             assert self.xdf_folder.is_dir(), f"XDF folder is not a directory: {self.xdf_folder}"
             self.update_log_display(f"XDF folder selected: {self.xdf_folder}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -1070,7 +1081,7 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
         return (self.recording_start_datetime, self.recording_start_lsl_local_offset)
 
 
-    def _common_initiate_recording(self, allow_prompt_user_for_filename: bool = True):
+    def _common_initiate_recording(self, allow_prompt_user_for_filename: bool = False):
         """Common code for initiating recording
         called by `self.start_recording()` and `self.auto_start_recording()`, and also by `self.split_recording()`
 
@@ -1120,7 +1131,7 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
             return
         
         # Create default filename with timestamp
-        new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=True)
+        new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=False)
 
         # Update GUI
         try:
@@ -1148,7 +1159,7 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
         
         try:
             # Create default filename with timestamp
-            new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=True)
+            new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=False)
             
             # Update GUI
             try:

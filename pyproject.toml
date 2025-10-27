@@ -19,6 +19,8 @@ dependencies = [
     "pytz>=2025.2",
     "pyxdf>=1.17.0",
     "setuptools>=80.9.0",
+    "sounddevice>=0.5.3",
+    "soundfile>=0.13.1",
     "wheel>=0.45.1",
     "whisper-timestamped",
 ]
