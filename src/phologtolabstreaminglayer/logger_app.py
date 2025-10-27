@@ -125,8 +125,7 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
         self.setup_lsl_outlet()
 
         ## setup transcirption
-        # self.root.after(200, self.auto_start_live_transcription)
-
+        self.root.after(200, self.auto_start_live_transcription)
 
         # Setup system tray and global hotkey
         self.setup_system_tray()
@@ -374,33 +373,38 @@ class LoggerApp(LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
 
         """
         stream_setup_fn_dict: Dict = {
-            'TextLogger': self.setup_TextLogger_outlet(),
-            'EventBoard': self.setup_eventboard_outlet(),
-            'WhisperLiveLogger': self.setup_lsl_outlet_LiveWhisperTranscriptionAppMixin(),
+            'TextLogger': self.setup_TextLogger_outlet,
+            'EventBoard': self.setup_eventboard_outlet,
+            'WhisperLiveLogger': self.setup_lsl_outlet_LiveWhisperTranscriptionAppMixin,
         }
         were_any_success: bool = False
+        print(f'setup_lsl_outlet():')
+        print(f'\tstream_setup_fn_dict: {stream_setup_fn_dict}')
         for a_stream_name, a_setup_fn in stream_setup_fn_dict.items():
             try:
                 # Create stream info
                 a_setup_fn() ## just setup
                 were_any_success = True
             
-                # Update LSL status label safely
-                try:
-                    if not self._shutting_down:
-                        self.lsl_status_label.config(text=f"LSL Status: Connected - {a_stream_name}", foreground="green")
-                except tk.TclError:
-                    pass  # GUI is being destroyed
-                
+                # # Update LSL status label safely
+                # try:
+                #     if not self._shutting_down:
+                #         self.lsl_status_label.config(text=f"LSL Status: Connected - {a_stream_name}", foreground="green")
+                # except tk.TclError:
+                #     pass  # GUI is being destroyed
+                print(f'\tfinished: "{a_stream_name}" setup.')
                 
             except Exception as e:
-                try:
-                    if not self._shutting_down:
-                        self.lsl_status_label.config(text=f"LSL Status: Error - {a_stream_name} - {str(e)}", foreground="red")
-                except tk.TclError:
-                    pass  # GUI is being destroyed
+                print(f'\terror in "{a_stream_name}" setup: {e}')
+                raise
+                # try:
+                #     if not self._shutting_down:
+                #         self.lsl_status_label.config(text=f"LSL Status: Error - {a_stream_name} - {str(e)}", foreground="red")
+                # except tk.TclError:
+                #     pass  # GUI is being destroyed
 
         ## END for a_stream_name, a_setup_fn in stream_setup_fn_dict...
+        print(f'done.')
 
         if were_any_success:
             # Setup inlet for recording our own stream (with delay to allow outlet to be discovered)
