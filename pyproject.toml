@@ -42,5 +42,7 @@ dev-dependencies = [
 ]
 
 [tool.uv.sources]
-phopylslhelper = { path = "../LSL_REPOS/LSL/PhoPyLSLhelper", editable = true }
-whisper-timestamped = { path = "L:/repos/ExternalTesting/whisper-timestamped", editable = true }
+phopylslhelper = { path = "../phopylslhelper", editable = true }
+whisper-timestamped = { path = "../whisper-timestamped", editable = true }
+# phopylslhelper = { path = "../LSL_REPOS/LSL/PhoPyLSLhelper", editable = true }
+# whisper-timestamped = { path = "L:/repos/ExternalTesting/whisper-timestamped", editable = true }
