@@ -33,18 +33,24 @@ _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLog
 
 class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
     # Class variable to track if an instance is already running
-    _instance_running = False
-    _lock_port = program_lock_port  # Port to use for singleton check
+    _SingletonInstanceMixin_env_lock_port_variable_name: str = "LIVE_WHISPER_LOCK_PORT"
+
+    # _instance_running = False
+    # _lock_port = program_lock_port  # Port to use for singleton check
 
     # _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
     xdf_folder: Path = None # Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
     
     def __init__(self, root, xdf_folder=None):
+
+        self.init_SingletonInstanceMixin()
+
         self.root = root
         self.root.title("LSL Logger with XDF Recording")
         self.root.geometry("520x720") # WxH
         
         self.stream_names = ['TextLogger', 'EventBoard', 'WhisperLiveLogger'] # : List[str]
+
 
         # Set application icon
         self.setup_app_icon()
@@ -66,12 +72,10 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         self.init_LiveWhisperTranscriptionAppMixin()
 
         # System tray and hotkey state
-        self.system_tray = None
-        self.hotkey_popover = None
-        self.is_minimized = False
+        self.init_SystemTrayAppMixin()
         
-        # Singleton lock socket
-        self._lock_socket = None
+        # # Singleton lock socket
+        # self._lock_socket = None
         
         # Shutdown flag to prevent GUI updates during shutdown
         self._shutting_down = False
@@ -105,9 +109,12 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         ## setup transcirption
         self.root.after(200, self.auto_start_live_transcription)
 
-        # Setup system tray and global hotkey
-        self.setup_system_tray()
-        self.setup_global_hotkey()
+        # # Setup system tray and global hotkey
+        # self.setup_system_tray()
+        # self.setup_global_hotkey()
+
+        self.setup_SystemTrayAppMixin()
+
 
     @property
     def eventboard_outlet(self) -> Optional[pylsl.StreamOutlet]:
