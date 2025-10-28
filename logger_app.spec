@@ -1,10 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 
+from PyInstaller.utils.hooks import collect_dynamic_libs
+pylsl_bins = collect_dynamic_libs("pylsl")
+
 a = Analysis(
     ['logger_app.py'],
     pathex=[],
-    binaries=[],
+    binaries=pylsl_bins,
     datas=[],
     hiddenimports=[],
     hookspath=[],

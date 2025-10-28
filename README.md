@@ -315,3 +315,28 @@ pyenv uninstall 3.9.13
 pyenv install 3.9.13
 
 ```
+
+
+## Output LabStreamingLayer Steams
+```python
+# 'TextLogger' -  User-Arbitrary timestampped messages
+  info = pylsl.StreamInfo(
+      name='TextLogger',
+      type='Markers',
+      channel_count=1,
+      nominal_srate=pylsl.IRREGULAR_RATE,
+      channel_format=pylsl.cf_string,
+      source_id='textlogger_001'
+  )
+
+## 'EventBoard' - specific events
+  info = pylsl.StreamInfo(
+      name='EventBoard',
+      type='Markers',
+      channel_count=1,
+      nominal_srate=pylsl.IRREGULAR_RATE,
+      channel_format=pylsl.cf_string,
+      source_id='eventboard_001'
+  )
+  
+```

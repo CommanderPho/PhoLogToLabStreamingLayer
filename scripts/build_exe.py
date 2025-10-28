@@ -1,4 +1,44 @@
 import PyInstaller.__main__
+from pathlib import Path
+
+
+def main() -> None:
+    script_dir = Path(__file__).parent
+    repo_root = script_dir.parent.resolve()
+    # Prefer the app spec; fall back to CLI build
+    primary_spec = repo_root / "PhoLogToLabStreamingLayer.spec"
+    entry_script = repo_root / "logger_app.py"
+
+    if primary_spec.exists():
+        PyInstaller.__main__.run([
+            str(primary_spec),
+            f"--distpath={repo_root}/dist",
+            f"--workpath={repo_root}/build",
+            "--noconfirm",
+            "--clean",
+        ])
+        return
+
+    PyInstaller.__main__.run([
+        str(entry_script),
+        "--onedir",
+        "--windowed",
+        "--name=PhoLogToLabStreamingLayer",
+        "--icon=icons/LogToLabStreamingLayerIcon_Light.ico",
+        "--collect-all=mne",
+        "--collect-all=pylsl",
+        f"--distpath={repo_root}/dist",
+        f"--workpath={repo_root}/build",
+        f"--specpath={repo_root}",
+        "--noconfirm",
+        "--clean",
+    ])
+
+
+if __name__ == "__main__":
+    main()
+
+import PyInstaller.__main__
 import sys
 from pathlib import Path
 
