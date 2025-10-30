@@ -21,7 +21,7 @@ dependencies = [
     "setuptools>=80.9.0",
     "sounddevice>=0.5.3",
     "soundfile>=0.13.1",
-    "torch==1.13.1; platform_system == 'Darwin' and platform_machine == 'x86_64'",
+    "torch>=2.7.1; platform_system == 'Darwin' and platform_machine == 'x86_64'",
     "torch; platform_system != 'Darwin' or platform_machine != 'x86_64'",
     "wheel>=0.45.1",
     "whisper-timestamped",
@@ -44,7 +44,7 @@ dev-dependencies = [
 ]
 
 [tool.uv.sources]
-phopylslhelper = { path = "../phopylslhelper", editable = true }
-whisper-timestamped = { path = "../whisper-timestamped", editable = true }
-# phopylslhelper = { path = "../LSL_REPOS/LSL/PhoPyLSLhelper", editable = true }
-# whisper-timestamped = { path = "L:/repos/ExternalTesting/whisper-timestamped", editable = true }
+# phopylslhelper = { path = "../PhoPyLSLhelper", editable = true }
+# whisper-timestamped = { path = "../whisper-timestamped", editable = true }
+phopylslhelper = { path = "../LSL_REPOS/LSL/PhoPyLSLhelper", editable = true }
+whisper-timestamped = { path = "L:/repos/ExternalTesting/whisper-timestamped", editable = true }

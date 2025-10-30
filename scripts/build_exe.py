@@ -27,12 +27,15 @@ def main() -> None:
         "--icon=icons/LogToLabStreamingLayerIcon_Light.ico",
         "--collect-all=mne",
         "--collect-all=pylsl",
+        '--collect-all=whisper_timestamped', 
+        '--collect-all=whisper',
         f"--distpath={repo_root}/dist",
         f"--workpath={repo_root}/build",
         f"--specpath={repo_root}",
         "--noconfirm",
         "--clean",
     ])
+
 
 
 if __name__ == "__main__":
@@ -65,6 +68,9 @@ PyInstaller.__main__.run([
     '--hidden-import=datetime',
     '--collect-all=mne',  # Include all MNE data files
     '--collect-all=pylsl',  # Include all PyLSL data files
+    '--collect-all=whisper_timestamped', 
+    '--collect-all=whisper',
+    '--collect-all=python-dtw',
     f'--distpath={main_app_dir}/dist',
     f'--workpath={main_app_dir}/build',
     f'--specpath={main_app_dir}',
