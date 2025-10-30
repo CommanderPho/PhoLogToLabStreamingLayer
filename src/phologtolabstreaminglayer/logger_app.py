@@ -24,7 +24,9 @@ from phopylslhelper.easy_time_sync import EasyTimeSyncParsingMixin
 from phopylslhelper.mixins.app_helpers import SingletonInstanceMixin, AppThemeMixin, SystemTrayAppMixin
 from whisper_timestamped.mixins.live_whisper_transcription import LiveWhisperTranscriptionAppMixin
 
-program_lock_port = int(os.environ.get("LIVE_WHISPER_LOCK_PORT", 13372))
+# program_lock_port = int(os.environ.get("LIVE_WHISPER_LOCK_PORT", 13372))
+
+program_lock_port = int(os.environ.get("PHO_LOGTOLABSTREAMINGLAYER_LOCK_PORT", 13379))
 
 
 _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
@@ -33,10 +35,11 @@ _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLog
 
 class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
     # Class variable to track if an instance is already running
-    _SingletonInstanceMixin_env_lock_port_variable_name: str = "LIVE_WHISPER_LOCK_PORT"
+    # _SingletonInstanceMixin_env_lock_port_variable_name: str = "LIVE_WHISPER_LOCK_PORT"
+    _SingletonInstanceMixin_env_lock_port_variable_name: str = "PHO_LOGTOLABSTREAMINGLAYER_LOCK_PORT"
 
     # _instance_running = False
-    # _lock_port = program_lock_port  # Port to use for singleton check
+    _lock_port = deepcopy(program_lock_port)  # Port to use for singleton check
 
     # _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
     xdf_folder: Path = None # Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
@@ -50,7 +53,6 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         self.root.geometry("520x720") # WxH
         
         self.stream_names = ['TextLogger', 'EventBoard', 'WhisperLiveLogger'] # : List[str]
-
 
         # Set application icon
         self.setup_app_icon()
@@ -109,10 +111,7 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         ## setup transcirption
         self.root.after(200, self.auto_start_live_transcription)
 
-        # # Setup system tray and global hotkey
-        # self.setup_system_tray()
-        # self.setup_global_hotkey()
-
+        # Setup system tray and global hotkey
         self.setup_SystemTrayAppMixin()
 
 
