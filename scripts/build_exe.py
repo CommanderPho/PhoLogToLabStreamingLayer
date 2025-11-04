@@ -29,6 +29,7 @@ def main() -> None:
         "--collect-all=pylsl",
         '--collect-all=whisper_timestamped', 
         '--collect-all=whisper',
+        "--collect-all=dtw",
         "--collect-all=torch",
         "--collect-all=matplotlib",
         "--collect-all=PIL",
@@ -79,7 +80,7 @@ PyInstaller.__main__.run([
     '--collect-all=pylsl',  # Include all PyLSL data files
     '--collect-all=whisper_timestamped', 
     '--collect-all=whisper',
-    '--collect-all=python-dtw',
+    '--collect-all=dtw',
     '--collect-all=torch',
     '--collect-all=matplotlib',
     '--collect-all=PIL',

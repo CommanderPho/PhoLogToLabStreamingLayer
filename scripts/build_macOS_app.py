@@ -27,6 +27,7 @@ for pkg in [
     'pylsl',
     'whisper_timestamped',
     'whisper',
+    'dtw',
     'torch',
     'matplotlib',
     'PIL',

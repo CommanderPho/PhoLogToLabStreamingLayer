@@ -7,6 +7,7 @@ requires-python = ">=3.10,<3.11"
 dependencies = [
     "attrs>=25.3.0",
     "cython>=3.1.4",
+    "dtw-python",
     "keyboard>=0.13.5",
     "matplotlib>=3.9.4",
     "mne>=1.8.0",
@@ -44,7 +45,6 @@ dev-dependencies = [
 ]
 
 [tool.uv.sources]
-# phopylslhelper = { path = "../PhoPyLSLhelper", editable = true }
-# whisper-timestamped = { path = "../whisper-timestamped", editable = true }
-phopylslhelper = { path = "../LSL_REPOS/LSL/PhoPyLSLhelper", editable = true }
-whisper-timestamped = { path = "L:/repos/ExternalTesting/whisper-timestamped", editable = true }
+dtw-python = { git = "https://github.com/DynamicTimeWarping/dtw-python.git" }
+whisper-timestamped = { git = "https://github.com/CommanderPho/whisper-timestamped.git" }
+phopylslhelper = { git = "https://github.com/CommanderPho/phopylslhelper.git" }
