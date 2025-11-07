@@ -1,31 +1,39 @@
 {
 	"folders": [
-		{
-			"path": "L:/repos/ExternalTesting/whisper-timestamped"
-		},
-		{
-			"path": "../emotiv-lsl"
-		},
-		{
-			"path": "../PhoLogToLabStreamingLayer"
-		},
-		{
-			// "path": "../hopylslhelper"
+        {
+            "path": "L:/repos/ExternalTesting/whisper-timestamped"
+        },
+        {
+            "path": "../emotiv-lsl"
+        },
+        {
+            "path": "../PhoLogToLabStreamingLayer"
+        },
+        {
             "path": "../LSL_REPOS/LSL/PhoPyLSLhelper"
-		},
-		{
-			"path": "../PhoLabStreamingReceiver"
-		},
-		{
-			"path": "../bsl"
-		},
-		{
-			"path": "../stream_viewer"
-		},
-		// {
-		// 	"path": "../timeflux_TouchOSC_sound_reciever"
-		// }
-	],
+        },
+        {
+            "path": "../PhoLabStreamingReceiver"
+        },
+        {
+            "path": "../bsl"
+        },
+        {
+            "path": "../stream_viewer"
+        },
+        {
+            "path": "../LSL_REPOS/lab-recorder-python"
+        },
+        {
+            "path": "../LSL_REPOS/App-LabRecorder"
+        },
+        {
+            "path": "../LSL_REPOS/App-SigVisualizer"
+        },
+        {
+            "path": "../LSL_REPOS/App-XDFStreamer"
+        }
+    ],
 	"settings": {
             "workbench.colorCustomizations": {
             "editor.lineHighlightBackground": "#13e4df2d",           // teal translucent
