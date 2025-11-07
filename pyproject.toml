@@ -1,6 +1,6 @@
 [project]
 name = "phologtolabstreaminglayer"
-version = "0.3.2"
+version = "0.3.3"
 description = "a complete but minimal python app that allows the user to take timestampped notes to labstreaminglayer with EventBoard functionality"
 readme = "README.md"
 requires-python = ">=3.10,<3.11"
@@ -48,7 +48,3 @@ dev-dependencies = [
 dtw-python = { git = "https://github.com/DynamicTimeWarping/dtw-python.git" }
 whisper-timestamped = { git = "https://github.com/CommanderPho/whisper-timestamped.git" }
 phopylslhelper = { git = "https://github.com/CommanderPho/phopylslhelper.git" }
-
-[tool.uv.scripts]
-use-dev-sources = "python scripts/switch_uv_sources.py --mode dev"
-use-release-sources = "python scripts/switch_uv_sources.py --mode release"
