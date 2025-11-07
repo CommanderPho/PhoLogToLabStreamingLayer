@@ -25,14 +25,29 @@ def main() -> None:
         "--windowed",
         "--name=PhoLogToLabStreamingLayer",
         "--icon=icons/LogToLabStreamingLayerIcon_Light.ico",
+        "--collect-all=RealtimeSTT",
+        "--collect-all=pvporcupine",
         "--collect-all=mne",
         "--collect-all=pylsl",
+        '--collect-all=whisper_timestamped', 
+        '--collect-all=whisper',
+        "--collect-all=dtw",
+        "--collect-all=torch",
+        "--collect-all=matplotlib",
+        "--collect-all=PIL",
+        "--collect-all=pyxdf",
+        "--collect-all=pystray",
+        "--collect-all=mne_lsl",
+        "--collect-all=sounddevice",
+        "--collect-all=soundfile",
+        "--collect-all=phopylslhelper",
         f"--distpath={repo_root}/dist",
         f"--workpath={repo_root}/build",
         f"--specpath={repo_root}",
         "--noconfirm",
         "--clean",
     ])
+
 
 
 if __name__ == "__main__":
@@ -55,6 +70,8 @@ PyInstaller.__main__.run([
     '--name=PhoLogToLabStreamingLayer',
     '--icon=icons/LogToLabStreamingLayerIcon_Light.ico',  # Optional: add an icon file
     '--add-data=*.py;.',  # Include all Python files
+    '--collect-all=RealtimeSTT',
+    '--collect-all=pvporcupine',
     '--hidden-import=pylsl',
     '--hidden-import=mne',
     '--hidden-import=numpy',
@@ -65,6 +82,18 @@ PyInstaller.__main__.run([
     '--hidden-import=datetime',
     '--collect-all=mne',  # Include all MNE data files
     '--collect-all=pylsl',  # Include all PyLSL data files
+    '--collect-all=whisper_timestamped', 
+    '--collect-all=whisper',
+    '--collect-all=dtw',
+    '--collect-all=torch',
+    '--collect-all=matplotlib',
+    '--collect-all=PIL',
+    '--collect-all=pyxdf',
+    '--collect-all=pystray',
+    '--collect-all=mne_lsl',
+    '--collect-all=sounddevice',
+    '--collect-all=soundfile',
+    '--collect-all=phopylslhelper',
     f'--distpath={main_app_dir}/dist',
     f'--workpath={main_app_dir}/build',
     f'--specpath={main_app_dir}',

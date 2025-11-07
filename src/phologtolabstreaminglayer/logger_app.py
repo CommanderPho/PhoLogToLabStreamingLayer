@@ -1,3 +1,4 @@
+from typing import Dict, List, Tuple, Optional, Callable, Union, Any
 from copy import deepcopy
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
@@ -20,51 +21,39 @@ import socket
 import sys
 from phopylslhelper.general_helpers import unwrap_single_element_listlike_if_needed, readable_dt_str, from_readable_dt_str, localize_datetime_to_timezone, tz_UTC, tz_Eastern, _default_tz
 from phopylslhelper.easy_time_sync import EasyTimeSyncParsingMixin
+from phopylslhelper.mixins.app_helpers import SingletonInstanceMixin, AppThemeMixin, SystemTrayAppMixin
+from whisper_timestamped.mixins.live_whisper_transcription import LiveWhisperTranscriptionAppMixin
 
+# program_lock_port = int(os.environ.get("LIVE_WHISPER_LOCK_PORT", 13372))
 
-program_lock_port = int(os.environ.get("LIVE_WHISPER_LOCK_PORT", 13372))
+program_lock_port = int(os.environ.get("PHO_LOGTOLABSTREAMINGLAYER_LOCK_PORT", 13379))
 
 
 _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
 # _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
 
 
-class LoggerApp(EasyTimeSyncParsingMixin):
+class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
     # Class variable to track if an instance is already running
-    _instance_running = False
-    _lock_port = program_lock_port  # Port to use for singleton check
+    # _SingletonInstanceMixin_env_lock_port_variable_name: str = "LIVE_WHISPER_LOCK_PORT"
+    _SingletonInstanceMixin_env_lock_port_variable_name: str = "PHO_LOGTOLABSTREAMINGLAYER_LOCK_PORT"
+
+    # _instance_running = False
+    _lock_port = deepcopy(program_lock_port)  # Port to use for singleton check
+
     # _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
     xdf_folder: Path = None # Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
     
-    @classmethod
-    def is_instance_running(cls):
-        """Check if another instance is already running"""
-        try:
-            # Try to bind to a specific port
-            test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            test_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            test_socket.bind(('localhost', cls._lock_port))
-            test_socket.close()
-            return False
-        except OSError:
-            # Port is already in use, another instance is running
-            return True
-    
-    @classmethod
-    def mark_instance_running(cls):
-        """Mark that an instance is now running"""
-        cls._instance_running = True
-    
-    @classmethod
-    def mark_instance_stopped(cls):
-        """Mark that the instance has stopped"""
-        cls._instance_running = False
-    
     def __init__(self, root, xdf_folder=None):
+
+        self.init_SingletonInstanceMixin()
+
         self.root = root
         self.root.title("LSL Logger with XDF Recording")
-        self.root.geometry("600x500")
+        self.root.geometry("520x720") # WxH
         
+        self.stream_names = ['TextLogger', 'EventBoard', 'WhisperLiveLogger'] # : List[str]
+
         # Set application icon
         self.setup_app_icon()
         self.xdf_folder = (xdf_folder or _default_xdf_folder)
@@ -72,20 +61,23 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         # Recording state
         self.recording = False
         self.recording_thread = None
-        self.inlet = None
+        # self.inlet = None
+        self.inlets = {}
+        self.outlets = {}
+
         self.recorded_data = []
         # self.recording_start_lsl_local_offset = None
         # self.recording_start_datetime = None
 
         self.init_EasyTimeSyncParsingMixin()
-                
+        # Live transcription state
+        self.init_LiveWhisperTranscriptionAppMixin()
+
         # System tray and hotkey state
-        self.system_tray = None
-        self.hotkey_popover = None
-        self.is_minimized = False
+        self.init_SystemTrayAppMixin()
         
-        # Singleton lock socket
-        self._lock_socket = None
+        # # Singleton lock socket
+        # self._lock_socket = None
         
         # Shutdown flag to prevent GUI updates during shutdown
         self._shutting_down = False
@@ -104,7 +96,6 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         self.capture_stream_start_timestamps() ## `EasyTimeSyncParsingMixin`: capture timestamps for use in LSL streams
         self.capture_recording_start_timestamps() ## capture timestamps for use in LSL streams
 
-
         # Load EventBoard configuration
         self.load_eventboard_config()
         
@@ -116,140 +107,53 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         
         # Then create LSL outlets
         self.setup_lsl_outlet()
-        self.setup_eventboard_outlet()
-        
-        # Setup system tray and global hotkey
-        self.setup_system_tray()
-        self.setup_global_hotkey()
-    
 
-    def load_eventboard_config(self):
-        """Load EventBoard configuration from file"""
-        config_file = Path("eventboard_config.json")
-        
-        if not config_file.exists():
-            print(f"EventBoard config file not found: {config_file}")
-            print("Using default configuration")
-            self.eventboard_config = self.get_default_eventboard_config()
-            return
-        
-        try:
-            with open(config_file, 'r') as f:
-                config_data = json.load(f)
-                self.eventboard_config = config_data.get('eventboard_config', {})
-                print(f"EventBoard configuration loaded from {config_file}")
-        except Exception as e:
-            print(f"Error loading EventBoard config: {e}")
-            print("Using default configuration")
-            self.eventboard_config = self.get_default_eventboard_config()
-    
-    def get_default_eventboard_config(self):
-        """Get default EventBoard configuration"""
-        return {
-            "title": "Event Board",
-            "buttons": [
-                {"id": f"button_{i}_{j}", "row": i, "col": j, "text": f"Button {i}-{j}", 
-                 "event_name": f"EVENT_{i}_{j}", "color": "#2196F3", "type": "instantaneous"}
-                for i in range(1, 4) for j in range(1, 6)
-            ]
-        }
-    
-    def setup_app_icon(self):
-        """Setup application icon from PNG file based on system theme"""
-        try:
-            # Detect system theme and choose appropriate icon
-            icon_filename = self.get_theme_appropriate_icon()
-            icon_path = Path("icons") / icon_filename
-            
-            if icon_path.exists():
-                # Set window icon
-                self.root.iconphoto(True, tk.PhotoImage(file=str(icon_path)))
-                print(f"Application icon set from {icon_path}")
-            else:
-                print(f"Icon file not found: {icon_path}")
-        except Exception as e:
-            print(f"Error setting application icon: {e}")
-    
-    def get_theme_appropriate_icon(self):
-        """Get the appropriate icon filename based on system theme"""
-        try:
-            import platform
-            
-            if platform.system() == "Windows":
-                return self.detect_windows_theme()
-            else:
-                # For other systems, use a simple heuristic
-                return self.detect_theme_simple()
-                
-        except Exception as e:
-            print(f"Error detecting theme: {e}")
-            # Fallback to dark icon
-            return "LogToLabStreamingLayerIcon.png"
-    
-    def detect_windows_theme(self):
-        """Detect Windows theme using registry"""
-        try:
-            import winreg
-            
-            # Check Windows 10/11 dark mode setting
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
-                try:
-                    # Check if dark mode is enabled
-                    dark_mode = winreg.QueryValueEx(key, "AppsUseLightTheme")[0]
-                    if dark_mode == 0:  # Dark mode enabled
-                        return "LogToLabStreamingLayerIcon.png"
-                    else:  # Light mode
-                        return "LogToLabStreamingLayerIcon_Light.png"
-                except FileNotFoundError:
-                    # Registry key doesn't exist, fall back to simple detection
-                    return self.detect_theme_simple()
-        except Exception as e:
-            print(f"Error reading Windows theme registry: {e}")
-            return self.detect_theme_simple()
-    
-    def detect_theme_simple(self):
-        """Simple theme detection using tkinter"""
-        try:
-            import tkinter as tk
-            
-            # Create a temporary root to test theme
-            temp_root = tk.Tk()
-            temp_root.withdraw()  # Hide the window
-            
-            try:
-                # Check the default background color
-                bg_color = temp_root.cget('bg')
-                
-                # Simple heuristic: if background is very dark, use light icon
-                if bg_color in ['#2e2e2e', '#3c3c3c', '#404040', 'SystemButtonFace']:
-                    return "LogToLabStreamingLayerIcon.png"
-                else:
-                    return "LogToLabStreamingLayerIcon_Light.png"
-            finally:
-                temp_root.destroy()
-                
-        except Exception as e:
-            print(f"Error in simple theme detection: {e}")
-            # Default to dark icon
-            return "LogToLabStreamingLayerIcon_Light.png"
-    
+        ## setup transcirption
+        self.root.after(200, self.auto_start_live_transcription)
+
+        # Setup system tray and global hotkey
+        self.setup_SystemTrayAppMixin()
+
+
+    @property
+    def eventboard_outlet(self) -> Optional[pylsl.StreamOutlet]:
+        """The eventboard_outlet property."""
+        return self.outlets['EventBoard']
+    @eventboard_outlet.setter
+    def eventboard_outlet(self, value):
+        self.outlets['EventBoard'] = value    
+
+    @property
+    def outlet_TextLogger(self) -> Optional[pylsl.StreamOutlet]:
+        """The outlet_TextLogger property."""
+        return self.outlets['TextLogger']
+    @outlet_TextLogger.setter
+    def outlet_TextLogger(self, value):
+        self.outlets['TextLogger'] = value
+
+    @property
+    def has_any_inlets(self) -> bool:
+        """The has_any_inlets property."""
+        return (self.inlets is not None) and (len(self.inlets) > 0)
+
+
     def parse_time_offset(self, time_str):
         """Parse time offset string (e.g., '5s', '2m', '1h') to seconds"""
         if not time_str or not time_str.strip():
             return 0
-        
+
         time_str = time_str.strip().lower()
-        
+
         # Extract number and unit
         import re
         match = re.match(r'^(\d+(?:\.\d+)?)\s*([smh]?)$', time_str)
-        
+
         if not match:
             return 0
-        
+
         value = float(match.group(1))
         unit = match.group(2) or 's'  # Default to seconds if no unit
-        
+
         # Convert to seconds
         if unit == 's':
             return value
@@ -260,54 +164,233 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         else:
             return 0
 
-    def acquire_singleton_lock(self):
-        """Acquire the singleton lock by binding to the port"""
-        try:
-            self._lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._lock_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self._lock_socket.bind(('localhost', self._lock_port))
-            self._lock_socket.listen(1)
-            self.mark_instance_running()
-            print("Singleton lock acquired successfully")
-            return True
-        except OSError as e:
-            print(f"Failed to acquire singleton lock: {e}")
-            return False
+
+
+    # AppThemeMixin ______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
+    # def setup_app_icon(self):
+    #     """Setup application icon from PNG file based on system theme"""
+    #     try:
+    #         # Detect system theme and choose appropriate icon
+    #         icon_filename = self.get_theme_appropriate_icon()
+    #         icon_path = Path("icons") / icon_filename
+            
+    #         if icon_path.exists():
+    #             # Set window icon
+    #             self.root.iconphoto(True, tk.PhotoImage(file=str(icon_path)))
+    #             print(f"Application icon set from {icon_path}")
+    #         else:
+    #             print(f"Icon file not found: {icon_path}")
+    #     except Exception as e:
+    #         print(f"Error setting application icon: {e}")
     
-    def release_singleton_lock(self):
-        """Release the singleton lock and clean up the socket"""
-        try:
-            if self._lock_socket:
-                self._lock_socket.close()
-                self._lock_socket = None
-            self.mark_instance_stopped()
-            print("Singleton lock released")
-        except Exception as e:
-            print(f"Error releasing singleton lock: {e}")
+    # def get_theme_appropriate_icon(self):
+    #     """Get the appropriate icon filename based on system theme"""
+    #     try:
+    #         import platform
+            
+    #         if platform.system() == "Windows":
+    #             return self.detect_windows_theme()
+    #         else:
+    #             # For other systems, use a simple heuristic
+    #             return self.detect_theme_simple()
+                
+    #     except Exception as e:
+    #         print(f"Error detecting theme: {e}")
+    #         # Fallback to dark icon
+    #         return "LogToLabStreamingLayerIcon.png"
     
-    def setup_recording_inlet(self):
-        """Setup inlet to record our own stream"""
-        try:
-            # Look for our own stream
-            streams = pylsl.resolve_byprop('name', 'TextLogger', timeout=2.0)
-            if streams:
-                self.inlet = pylsl.StreamInlet(streams[0])
-                print("Recording inlet created successfully")
+    # def detect_windows_theme(self):
+    #     """Detect Windows theme using registry"""
+    #     try:
+    #         import winreg
+            
+    #         # Check Windows 10/11 dark mode setting
+    #         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
+    #             try:
+    #                 # Check if dark mode is enabled
+    #                 dark_mode = winreg.QueryValueEx(key, "AppsUseLightTheme")[0]
+    #                 if dark_mode == 0:  # Dark mode enabled
+    #                     return "LogToLabStreamingLayerIcon.png"
+    #                 else:  # Light mode
+    #                     return "LogToLabStreamingLayerIcon_Light.png"
+    #             except FileNotFoundError:
+    #                 # Registry key doesn't exist, fall back to simple detection
+    #                 return self.detect_theme_simple()
+    #     except Exception as e:
+    #         print(f"Error reading Windows theme registry: {e}")
+    #         return self.detect_theme_simple()
+    
+    # def detect_theme_simple(self):
+    #     """Simple theme detection using tkinter"""
+    #     try:
+    #         import tkinter as tk
+            
+    #         # Create a temporary root to test theme
+    #         temp_root = tk.Tk()
+    #         temp_root.withdraw()  # Hide the window
+            
+    #         try:
+    #             # Check the default background color
+    #             bg_color = temp_root.cget('bg')
                 
-                # Auto-start recording after inlet is ready
-                self.root.after(500, self.auto_start_recording)
+    #             # Simple heuristic: if background is very dark, use light icon
+    #             if bg_color in ['#2e2e2e', '#3c3c3c', '#404040', 'SystemButtonFace']:
+    #                 return "LogToLabStreamingLayerIcon.png"
+    #             else:
+    #                 return "LogToLabStreamingLayerIcon_Light.png"
+    #         finally:
+    #             temp_root.destroy()
                 
-            else:
-                print("Could not find TextLogger stream for recording")
-                self.inlet = None
-        except Exception as e:
-            print(f"Error creating recording inlet: {e}")
-            self.inlet = None
+    #     except Exception as e:
+    #         print(f"Error in simple theme detection: {e}")
+    #         # Default to dark icon
+    #         return "LogToLabStreamingLayerIcon_Light.png"
+
+
+    # SingletonInstanceMixin _____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
+    # @classmethod
+    # def is_instance_running(cls):
+    #     """Check if another instance is already running"""
+    #     try:
+    #         # Try to bind to a specific port
+    #         test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #         test_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    #         test_socket.bind(('localhost', cls._lock_port))
+    #         test_socket.close()
+    #         return False
+    #     except OSError:
+    #         # Port is already in use, another instance is running
+    #         return True
+
+    # @classmethod
+    # def mark_instance_running(cls):
+    #     """Mark that an instance is now running"""
+    #     cls._instance_running = True
+
+    # @classmethod
+    # def mark_instance_stopped(cls):
+    #     """Mark that the instance has stopped"""
+    #     cls._instance_running = False
+
+
+    # def acquire_singleton_lock(self):
+    #     """Acquire the singleton lock by binding to the port"""
+    #     try:
+    #         self._lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #         self._lock_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    #         self._lock_socket.bind(('localhost', self._lock_port))
+    #         self._lock_socket.listen(1)
+    #         self.mark_instance_running()
+    #         print("Singleton lock acquired successfully")
+    #         return True
+    #     except OSError as e:
+    #         print(f"Failed to acquire singleton lock: {e}")
+    #         return False
+    
+    # def release_singleton_lock(self):
+    #     """Release the singleton lock and clean up the socket"""
+    #     try:
+    #         if self._lock_socket:
+    #             self._lock_socket.close()
+    #             self._lock_socket = None
+    #         self.mark_instance_stopped()
+    #         print("Singleton lock released")
+    #     except Exception as e:
+    #         print(f"Error releasing singleton lock: {e}")
+    
+
+
+
+
     # ---------------------------------------------------------------------------- #
     #                               Recording Methods                              #
     # ---------------------------------------------------------------------------- #
 
+    def setup_recording_inlet(self):
+        """Setup inlet to record our own stream
+
+        Modifies: self.inlets
+
+        """
+
+        # self.inlets = {}
+
+        stream_names: List[str] = self.stream_names # ['TextLogger', 'EventBoard', 'WhisperLiveLogger']
+        were_any_success: bool = False
+        for a_stream_name in stream_names:
+            should_remove_stream: bool = False
+            try:
+                # Look for our own stream
+                found_streams = pylsl.resolve_byprop('name', a_stream_name, timeout=2.0)
+                if found_streams:
+                    self.inlets[a_stream_name] = pylsl.StreamInlet(found_streams[0])
+                    print("Recording inlet created successfully")
+                    were_any_success = True                        
+                else:
+                    print(f"Could not find '{a_stream_name}' stream for recording")
+                    should_remove_stream = True
+
+            except Exception as e:
+                print(f"Error creating recording inlet for stream named '{a_stream_name}': {e}")
+                should_remove_stream = True
+
+            if (a_stream_name in self.inlets) and should_remove_stream:
+                _a_removed_stream = self.inlets.pop(a_stream_name)
+                if _a_removed_stream is not None:
+                    print(f'WARN: removed stream named "{a_stream_name}" from self.inlets.')
+
+        ## END for a_stream_name in stream_names...
+        if were_any_success:
+            # Auto-start recording after inlet is ready
+            self.root.after(500, self.auto_start_recording)
+
+
     def setup_lsl_outlet(self):
+        """Create an LSL outlet for sending messages
+
+        Modifies: self.inlets
+
+        """
+        stream_setup_fn_dict: Dict = {
+            'TextLogger': self.setup_TextLogger_outlet,
+            'EventBoard': self.setup_eventboard_outlet,
+            'WhisperLiveLogger': self.setup_lsl_outlet_LiveWhisperTranscriptionAppMixin,
+        }
+        were_any_success: bool = False
+        print(f'setup_lsl_outlet():')
+        print(f'\tstream_setup_fn_dict: {stream_setup_fn_dict}')
+        for a_stream_name, a_setup_fn in stream_setup_fn_dict.items():
+            try:
+                # Create stream info
+                a_setup_fn() ## just setup
+                were_any_success = True
+            
+                # # Update LSL status label safely
+                # try:
+                #     if not self._shutting_down:
+                #         self.lsl_status_label.config(text=f"LSL Status: Connected - {a_stream_name}", foreground="green")
+                # except tk.TclError:
+                #     pass  # GUI is being destroyed
+                print(f'\tfinished: "{a_stream_name}" setup.')
+                
+            except Exception as e:
+                print(f'\terror in "{a_stream_name}" setup: {e}')
+                raise
+                # try:
+                #     if not self._shutting_down:
+                #         self.lsl_status_label.config(text=f"LSL Status: Error - {a_stream_name} - {str(e)}", foreground="red")
+                # except tk.TclError:
+                #     pass  # GUI is being destroyed
+
+        ## END for a_stream_name, a_setup_fn in stream_setup_fn_dict...
+        print(f'done.')
+
+        if were_any_success:
+            # Setup inlet for recording our own stream (with delay to allow outlet to be discovered)
+            self.root.after(1000, self.setup_recording_inlet)
+   
+
+    def setup_TextLogger_outlet(self):
         """Create an LSL outlet for sending messages"""
         try:
             # Create stream info
@@ -325,31 +408,22 @@ class LoggerApp(EasyTimeSyncParsingMixin):
             info.desc().append_child_value("version", "2.1")
             info.desc().append_child_value("description", "TextLogger user entered text logs events")
 
-
             ## add a custom timestamp field to the stream info:
             info = self.EasyTimeSyncParsingMixin_add_lsl_outlet_info(info=info)
 
             # Create outlet
-            self.outlet = pylsl.StreamOutlet(info)
+            self.outlet_TextLogger = pylsl.StreamOutlet(info)
+            print("TextLogger LSL outlet created successfully")
 
-            # Update LSL status label safely
-            try:
-                if not self._shutting_down:
-                    self.lsl_status_label.config(text="LSL Status: Connected", foreground="green")
-            except tk.TclError:
-                pass  # GUI is being destroyed
-            
-            # Setup inlet for recording our own stream (with delay to allow outlet to be discovered)
-            self.root.after(1000, self.setup_recording_inlet)
-            
         except Exception as e:
+            print(f"Error creating TextLogger LSL outlet: {e}")
+            self.outlet_TextLogger = None
             try:
                 if not self._shutting_down:
                     self.lsl_status_label.config(text=f"LSL Status: Error - {str(e)}", foreground="red")
             except tk.TclError:
                 pass  # GUI is being destroyed
-            self.outlet = None
-    
+            
 
     def setup_eventboard_outlet(self):
         """Create an LSL outlet for EventBoard events"""
@@ -382,79 +456,19 @@ class LoggerApp(EasyTimeSyncParsingMixin):
             # info.desc().append_child_value("recording_start_datetime", readable_dt_str(self.recording_start_datetime))
             
             # Create outlet
-            self.eventboard_outlet = pylsl.StreamOutlet(info)
+            self.outlets['EventBoard'] = pylsl.StreamOutlet(info)
             print("EventBoard LSL outlet created successfully")
             
         except Exception as e:
             print(f"Error creating EventBoard LSL outlet: {e}")
-            self.eventboard_outlet = None
+            self.outlets['EventBoard'] = None
     
-    def setup_system_tray(self):
-        """Setup system tray icon and menu"""
-        try:
-            # Create a simple icon (you can replace this with a custom icon file)
-            icon_image = self.create_tray_icon()
-            
-            # Create system tray menu
-            menu = pystray.Menu(
-                pystray.MenuItem("Show App", self.show_app),
-                pystray.MenuItem("Quick Log", self.show_hotkey_popover),
-                pystray.MenuItem("Exit", self.quit_app)
-            )
-            
-            # Create system tray icon
-            self.system_tray = pystray.Icon(
-                "logger_app",
-                icon_image,
-                "LSL Logger",
-                menu
-            )
-            
-            # Add double-click handler to show app
-            self.system_tray.on_activate = self.show_app ## double-clicking doesn't foreground the app by default. Also clicking the windows close "X" just hides it to taskbar by default which I don't want. 
-            
-            # Start system tray in a separate thread
-            threading.Thread(target=self.system_tray.run, daemon=True).start()
-            
-        except Exception as e:
-            print(f"Error setting up system tray: {e}")
-    
-    def create_tray_icon(self):
-        """Create icon for the system tray from PNG file based on system theme"""
-        try:
-            # Use the same theme detection as the main icon
-            icon_filename = self.get_theme_appropriate_icon()
-            icon_path = Path("icons") / icon_filename
-            
-            if icon_path.exists():
-                # Load and resize the PNG icon for system tray
-                image = Image.open(str(icon_path))
-                # Resize to appropriate size for system tray (16x16 or 32x32)
-                image = image.resize((16, 16), Image.Resampling.LANCZOS)
-                return image
-            else:
-                print(f"Tray icon file not found: {icon_path}, using default")
-                return self.create_default_tray_icon()
-        except Exception as e:
-            print(f"Error loading tray icon: {e}, using default")
-            return self.create_default_tray_icon()
-    
-    def create_default_tray_icon(self):
-        """Create a simple default icon for the system tray"""
-        # Create a 16x16 icon with a simple design
-        width = 16
-        height = 16
-        
-        # Create image with a dark background
-        image = Image.new('RGB', (width, height), color='#2c3e50')
-        draw = ImageDraw.Draw(image)
-        
-        # Draw a simple "L" shape in white
-        draw.rectangle([2, 2, 6, 14], fill='white')  # Vertical line
-        draw.rectangle([2, 10, 12, 14], fill='white')  # Horizontal line
-        
-        return image
-    
+
+    # ==================================================================================================================================================================================================================================================================================== #
+    # Other GUI/Status Methods                                                                                                                                                                                                                                                             #
+    # ==================================================================================================================================================================================================================================================================================== #
+
+
     def setup_global_hotkey(self):
         """Setup global hotkey for quick log entry"""
         try:
@@ -629,6 +643,74 @@ class LoggerApp(EasyTimeSyncParsingMixin):
             self.hotkey_popover.destroy()
             self.hotkey_popover = None
     
+
+    # SystemTrayAppMixin _________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
+    def setup_system_tray(self):
+        """Setup system tray icon and menu"""
+        try:
+            # Create a simple icon (you can replace this with a custom icon file)
+            icon_image = self.create_tray_icon()
+
+            # Create system tray menu
+            menu = pystray.Menu(
+                pystray.MenuItem("Show App", self.show_app),
+                pystray.MenuItem("Quick Log", self.show_hotkey_popover),
+                pystray.MenuItem("Exit", self.quit_app)
+            )
+
+            # Create system tray icon
+            self.system_tray = pystray.Icon(
+                "logger_app",
+                icon_image,
+                "LSL Logger",
+                menu
+            )
+
+            # Add double-click handler to show app
+            self.system_tray.on_activate = self.show_app ## double-clicking doesn't foreground the app by default. Also clicking the windows close "X" just hides it to taskbar by default which I don't want. 
+
+            # Start system tray in a separate thread
+            threading.Thread(target=self.system_tray.run, daemon=True).start()
+
+        except Exception as e:
+            print(f"Error setting up system tray: {e}")
+
+    def create_tray_icon(self):
+        """Create icon for the system tray from PNG file based on system theme"""
+        try:
+            # Use the same theme detection as the main icon
+            icon_filename = self.get_theme_appropriate_icon()
+            icon_path = Path("icons") / icon_filename
+
+            if icon_path.exists():
+                # Load and resize the PNG icon for system tray
+                image = Image.open(str(icon_path))
+                # Resize to appropriate size for system tray (16x16 or 32x32)
+                image = image.resize((16, 16), Image.Resampling.LANCZOS)
+                return image
+            else:
+                print(f"Tray icon file not found: {icon_path}, using default")
+                return self.create_default_tray_icon()
+        except Exception as e:
+            print(f"Error loading tray icon: {e}, using default")
+            return self.create_default_tray_icon()
+
+    def create_default_tray_icon(self):
+        """Create a simple default icon for the system tray"""
+        # Create a 16x16 icon with a simple design
+        width = 16
+        height = 16
+
+        # Create image with a dark background
+        image = Image.new('RGB', (width, height), color='#2c3e50')
+        draw = ImageDraw.Draw(image)
+
+        # Draw a simple "L" shape in white
+        draw.rectangle([2, 2, 6, 14], fill='white')  # Vertical line
+        draw.rectangle([2, 10, 12, 14], fill='white')  # Horizontal line
+
+        return image
+
     def show_app(self):
         """Show the main application window"""
         self.is_minimized = False
@@ -672,6 +754,7 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         self.on_closing()
 
 
+    # Resume _____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
     def setup_gui(self):
         """Create the GUI elements"""
         # Main frame
@@ -712,12 +795,17 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         self.minimize_button = ttk.Button(recording_frame, text="Minimize to Tray", command=self.toggle_minimize)
         self.minimize_button.grid(row=0, column=4, padx=5)
         
-        # EventBoard frame
-        self.setup_eventboard_gui(main_frame)
+        # Live Transcription control frame
+        self.setup_gui_LiveWhisperTranscriptionAppMixin(main_frame, row=2)
 
+        # EventBoard frame
+        self.setup_eventboard_gui(main_frame, row=3)
+
+        next_row: int = 4
         # Text input label and entry frame
         input_frame = ttk.Frame(main_frame)
-        input_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        input_frame.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        next_row = next_row + 1
         input_frame.columnconfigure(1, weight=1)
         
         ttk.Label(input_frame, text="Message:").grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
@@ -735,15 +823,18 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         self.log_button.grid(row=0, column=2)
         
         # Log display area
-        ttk.Label(main_frame, text="Log History:").grid(row=4, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
+        ttk.Label(main_frame, text="Log History:").grid(row=next_row, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
+        next_row = next_row + 1
         
         # Scrolled text widget for log history
         self.log_display = scrolledtext.ScrolledText(main_frame, height=15, width=70)
-        self.log_display.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
-        
+        self.log_display.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        next_row = next_row + 1
+
         # Bottom frame for buttons and info
         bottom_frame = ttk.Frame(main_frame)
-        bottom_frame.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E))
+        bottom_frame.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E))
+        next_row = next_row + 1
         bottom_frame.columnconfigure(1, weight=1)
         
         # Clear log button
@@ -756,14 +847,47 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         # Focus on text entry
         self.text_entry.focus()
     
-    def setup_eventboard_gui(self, parent):
+    # Eventboard methods _________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
+
+    def load_eventboard_config(self):
+        """Load EventBoard configuration from file"""
+        config_file = Path("eventboard_config.json")
+
+        if not config_file.exists():
+            print(f"EventBoard config file not found: {config_file}")
+            print("Using default configuration")
+            self.eventboard_config = self.get_default_eventboard_config()
+            return
+
+        try:
+            with open(config_file, 'r') as f:
+                config_data = json.load(f)
+                self.eventboard_config = config_data.get('eventboard_config', {})
+                print(f"EventBoard configuration loaded from {config_file}")
+        except Exception as e:
+            print(f"Error loading EventBoard config: {e}")
+            print("Using default configuration")
+            self.eventboard_config = self.get_default_eventboard_config()
+
+    def get_default_eventboard_config(self):
+        """Get default EventBoard configuration"""
+        return {
+            "title": "Event Board",
+            "buttons": [
+                {"id": f"button_{i}_{j}", "row": i, "col": j, "text": f"Button {i}-{j}", 
+                 "event_name": f"EVENT_{i}_{j}", "color": "#2196F3", "type": "instantaneous"}
+                for i in range(1, 4) for j in range(1, 6)
+            ]
+        }
+
+    def setup_eventboard_gui(self, parent, row: int=2):
         """Setup EventBoard GUI with 3x5 grid of buttons and time offset dropdowns"""
         if not self.eventboard_config:
             return
         
         # EventBoard frame
         eventboard_frame = ttk.LabelFrame(parent, text=self.eventboard_config.get('title', 'Event Board'), padding="10")
-        eventboard_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        eventboard_frame.grid(row=row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
         
         # Configure grid for 3 rows and 5 columns (each cell has button + dropdown)
         for i in range(3):
@@ -1029,15 +1153,25 @@ class LoggerApp(EasyTimeSyncParsingMixin):
             print("EventBoard LSL outlet not available")
             raise Exception("EventBoard LSL outlet not available")
 
-
     def user_select_xdf_folder_if_needed(self) -> Path:
         """Ensures the self.xdf_folder is valid, otherwise forces the user to select a valid one. returns the valid folder.
         """
+        print(f'user_select_xdf_folder_if_needed(): self.xdf_folder: "{self.xdf_folder}", type: {type(self.xdf_folder)}\n\tself.xdf_folder.exists(): {self.xdf_folder.exists()}\n\t_default_xdf_folder.is_dir(): {_default_xdf_folder.is_dir()}')
+        if (self.xdf_folder is not None) and isinstance(self.xdf_folder, str):
+            self.xdf_folder = Path(self.xdf_folder).resolve()
+        print(f'(self.xdf_folder is not None) and (self.xdf_folder.exists()) and (self.xdf_folder.is_dir()): {(self.xdf_folder is not None) and (self.xdf_folder.exists()) and (self.xdf_folder.is_dir())}')
         if (self.xdf_folder is not None) and (self.xdf_folder.exists()) and (self.xdf_folder.is_dir()):
             ## already had valid folder, just return it
             return self.xdf_folder
-        else:        
-            self.xdf_folder = Path(filedialog.askdirectory(initialdir=str(self.xdf_folder), title="Select output XDF Folder - PhoLogToLabStreamingLayer_logs")).resolve()
+        else:
+            ## try to get the default first
+            if (_default_xdf_folder is not None) and (_default_xdf_folder.exists()) and (_default_xdf_folder.is_dir()):
+                self.xdf_folder = _default_xdf_folder
+            else:
+                ## prompt user with GUI:
+                print(f'_default_xdf_folder: "{_default_xdf_folder.as_posix()}"')
+                self.xdf_folder = Path(filedialog.askdirectory(initialdir=str(self.xdf_folder), title="Select output XDF Folder - PhoLogToLabStreamingLayer_logs")).resolve()
+
             assert self.xdf_folder.exists(), f"XDF folder does not exist: {self.xdf_folder}"
             assert self.xdf_folder.is_dir(), f"XDF folder is not a directory: {self.xdf_folder}"
             self.update_log_display(f"XDF folder selected: {self.xdf_folder}", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -1057,7 +1191,7 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         return (self.recording_start_datetime, self.recording_start_lsl_local_offset)
 
 
-    def _common_initiate_recording(self, allow_prompt_user_for_filename: bool = True):
+    def _common_initiate_recording(self, allow_prompt_user_for_filename: bool = False):
         """Common code for initiating recording
         called by `self.start_recording()` and `self.auto_start_recording()`, and also by `self.split_recording()`
 
@@ -1102,12 +1236,12 @@ class LoggerApp(EasyTimeSyncParsingMixin):
 
     def start_recording(self):
         """Start XDF recording"""
-        if not self.inlet:
+        if not self.has_any_inlets:
             messagebox.showerror("Error", "No LSL inlet available for recording")
             return
         
         # Create default filename with timestamp
-        new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=True)
+        new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=False)
 
         # Update GUI
         try:
@@ -1129,13 +1263,13 @@ class LoggerApp(EasyTimeSyncParsingMixin):
 
     def auto_start_recording(self):
         """Automatically start recording on app launch if inlet is available"""
-        if not self.inlet:
+        if not self.has_any_inlets:
             print("Cannot auto-start recording: no inlet available")
             return
         
         try:
             # Create default filename with timestamp
-            new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=True)
+            new_filename, (new_recording_start_datetime, new_recording_start_lsl_local_offset) = self._common_initiate_recording(allow_prompt_user_for_filename=False)
             
             # Update GUI
             try:
@@ -1170,24 +1304,51 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         """Background thread for recording LSL data with incremental backup"""
         sample_count = 0
         
-        while self.recording and self.inlet:
-            try:
-                sample, timestamp = self.inlet.pull_sample(timeout=1.0)
-                if sample:
-                    data_point = {
-                        'sample': sample,
-                        'timestamp': timestamp
-                    }
-                    self.recorded_data.append(data_point)
-                    sample_count += 1
-                    
-                    # Auto-save every 10 samples to backup file
-                    if sample_count % 10 == 0:
-                        self.save_backup()
+        while self.recording and self.has_any_inlets:
+            ## loop through streams
+            should_save_backup: bool = False
+            for a_stream_name, an_inlet in self.inlets.items():
+                try:
+                    sample, timestamp = an_inlet.pull_sample(timeout=1.0)
+                    if sample:
+                        data_point = {
+                            'sample': sample,
+                            'timestamp': timestamp,
+                            'stream_name': a_stream_name,
+                        }
+                        self.recorded_data.append(data_point)
+                        sample_count += 1
                         
-            except Exception as e:
-                print(f"Error in recording worker: {e}")
-                break
+                        # Auto-save every 10 samples to backup file
+                        if sample_count % 10 == 0:
+                            should_save_backup = True
+                                    
+                except Exception as e:
+                    print(f"Error in recording worker: {e}")
+                    break
+
+            ## END for a_stream_name, a_setup_fn in stream_setup_fn_dict...
+            if should_save_backup:
+                self.save_backup()
+
+            # ## single:
+            # try:
+            #     sample, timestamp = self.inlet.pull_sample(timeout=1.0)
+            #     if sample:
+            #         data_point = {
+            #             'sample': sample,
+            #             'timestamp': timestamp
+            #         }
+            #         self.recorded_data.append(data_point)
+            #         sample_count += 1
+                    
+            #         # Auto-save every 10 samples to backup file
+            #         if sample_count % 10 == 0:
+            #             self.save_backup()
+                        
+            # except Exception as e:
+            #     print(f"Error in recording worker: {e}")
+            #     break
 
 
     def stop_recording(self):
@@ -1249,7 +1410,7 @@ class LoggerApp(EasyTimeSyncParsingMixin):
 
     def start_new_split_recording(self):
         """Start new recording after split"""
-        if not self.inlet:
+        if not self.has_any_inlets:
             print("Cannot split recording: no inlet available")
             return
         
@@ -1304,7 +1465,6 @@ class LoggerApp(EasyTimeSyncParsingMixin):
                 
         except Exception as e:
             print(f"Error saving backup: {e}")
-
 
     def check_for_recovery(self):
         """Check for backup files and offer recovery on startup"""
@@ -1527,10 +1687,10 @@ class LoggerApp(EasyTimeSyncParsingMixin):
 
     def send_lsl_message(self, message):
         """Send message via LSL"""
-        if self.outlet:
+        if self.outlet_TextLogger:
             try:
                 # Send message with timestamp
-                self.outlet.push_sample([message])
+                self.outlet_TextLogger.push_sample([message])
                 print(f"LSL message sent: {message}")
             except Exception as e:
                 print(f"Error sending LSL message: {e}")
@@ -1566,6 +1726,10 @@ class LoggerApp(EasyTimeSyncParsingMixin):
         # Set shutdown flag to prevent GUI updates
         self._shutting_down = True
         
+        # Stop transcription if active
+        if self.transcription_active:
+            self.stop_live_transcription()
+
         # Stop recording if active
         if self.recording:
             self.stop_recording()
@@ -1581,13 +1745,23 @@ class LoggerApp(EasyTimeSyncParsingMixin):
             self.system_tray.stop()
         
         # Clean up LSL resources
-        if hasattr(self, 'outlet') and self.outlet:
-            del self.outlet
-        if hasattr(self, 'inlet') and self.inlet:
-            del self.inlet
-        if hasattr(self, 'eventboard_outlet') and self.eventboard_outlet:
-            del self.eventboard_outlet
-        
+
+        if hasattr(self, 'outlets') and self.outlets:
+            # for an_outlet_name, an_outlet in self.outlets:
+            outlet_names: List[str] = list(self.outlets.keys())
+            for an_outlet_name in outlet_names:
+                self.outlets.pop(an_outlet_name)
+            self.outlets = None
+            del self.outlets
+
+        if hasattr(self, 'inlets') and self.inlets:
+            a_names: List[str] = list(self.inlets.keys())
+            for a_name in a_names:
+                self.inlets.pop(a_name)
+            self.inlets = None
+            del self.inlets
+
+
         # Release singleton lock
         self.release_singleton_lock()
         
