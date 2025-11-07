@@ -5,7 +5,12 @@
 		},
 		{
 			"path": "../LSL_REPOS/LSL/PhoPyLSLhelper"
+		},
+		{
+			"path": "../LSL_REPOS/lab-recorder-python"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"python.languageServer": "None"
+	}
 }

@@ -629,6 +629,25 @@ wheels = [
 ]
 
 [[package]]
+name = "lab-recorder-python"
+version = "0.2.0"
+source = { editable = "../LSL_REPOS/lab-recorder-python" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pyinstaller" },
+    { name = "pylsl" },
+    { name = "pyxdf" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.0.2" },
+    { name = "pyinstaller", specifier = ">=6.16.0" },
+    { name = "pylsl", specifier = ">=1.17.6" },
+    { name = "pyxdf", specifier = ">=1.17.0" },
+]
+
+[[package]]
 name = "lazy-loader"
 version = "0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1130,6 +1149,7 @@ dependencies = [
     { name = "cython" },
     { name = "dtw-python" },
     { name = "keyboard" },
+    { name = "lab-recorder-python" },
     { name = "matplotlib" },
     { name = "mne" },
     { name = "mne-lsl" },
@@ -1162,6 +1182,7 @@ requires-dist = [
     { name = "cython", specifier = ">=3.1.4" },
     { name = "dtw-python", git = "https://github.com/DynamicTimeWarping/dtw-python.git" },
     { name = "keyboard", specifier = ">=0.13.5" },
+    { name = "lab-recorder-python", editable = "../LSL_REPOS/lab-recorder-python" },
     { name = "matplotlib", specifier = ">=3.9.4" },
     { name = "mne", specifier = ">=1.8.0" },
     { name = "mne-lsl", specifier = ">=1.6.1" },
