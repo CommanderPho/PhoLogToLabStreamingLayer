@@ -25,6 +25,8 @@ def main() -> None:
         "--windowed",
         "--name=PhoLogToLabStreamingLayer",
         "--icon=icons/LogToLabStreamingLayerIcon_Light.ico",
+        "--collect-all=RealtimeSTT",
+        "--collect-all=pvporcupine",
         "--collect-all=mne",
         "--collect-all=pylsl",
         '--collect-all=whisper_timestamped', 
@@ -68,6 +70,8 @@ PyInstaller.__main__.run([
     '--name=PhoLogToLabStreamingLayer',
     '--icon=icons/LogToLabStreamingLayerIcon_Light.ico',  # Optional: add an icon file
     '--add-data=*.py;.',  # Include all Python files
+    '--collect-all=RealtimeSTT',
+    '--collect-all=pvporcupine',
     '--hidden-import=pylsl',
     '--hidden-import=mne',
     '--hidden-import=numpy',
