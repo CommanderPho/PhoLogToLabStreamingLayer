@@ -51,7 +51,7 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
 
         self.root = root
         self.root.title("LSL Logger with XDF Recording")
-        self.root.geometry("520x720") # WxH
+        self.root.geometry("900x720") # WxH
         
         self.stream_names = ['TextLogger', 'EventBoard', 'WhisperLiveLogger'] # : List[str]
 
@@ -771,62 +771,78 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
     # Resume _____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
     def setup_gui(self):
         """Create the GUI elements"""
-        # Main frame
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        # Configure grid weights
+        # Configure root grid
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(4, weight=1)
-        
+
+        # Create tabbed notebook
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+        # Create tabs
+        recording_tab = ttk.Frame(self.notebook, padding="10")
+        live_audio_tab = ttk.Frame(self.notebook, padding="10")
+        eventboard_tab = ttk.Frame(self.notebook, padding="10")
+        manual_tab = ttk.Frame(self.notebook, padding="10")
+        settings_tab = ttk.Frame(self.notebook, padding="10")
+
+        self.notebook.add(recording_tab, text="Recording")
+        self.notebook.add(live_audio_tab, text="Live Audio")
+        self.notebook.add(eventboard_tab, text="EventBoard")
+        self.notebook.add(manual_tab, text="Manual Log")
+        self.notebook.add(settings_tab, text="Settings")
+
+        # Configure tab grids
+        for tab in (recording_tab, live_audio_tab, eventboard_tab, manual_tab, settings_tab):
+            tab.columnconfigure(0, weight=1)
+
+        # ------------------------- Recording Tab -------------------------
         # LSL Status label
-        self.lsl_status_label = ttk.Label(main_frame, text="LSL Status: Initializing...", foreground="orange")
-        self.lsl_status_label.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
-        
+        self.lsl_status_label = ttk.Label(recording_tab, text="LSL Status: Initializing...", foreground="orange")
+        self.lsl_status_label.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+
         # Recording control frame
-        recording_frame = ttk.LabelFrame(main_frame, text="XDF Recording", padding="5")
-        recording_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        recording_frame = ttk.LabelFrame(recording_tab, text="XDF Recording", padding="5")
+        recording_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         recording_frame.columnconfigure(1, weight=1)
-        
+
         # Recording status
         self.recording_status_label = ttk.Label(recording_frame, text="Not Recording", foreground="red")
         self.recording_status_label.grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
-        
+
         # Recording buttons
         self.start_recording_button = ttk.Button(recording_frame, text="Start Recording", command=self.start_recording)
         self.start_recording_button.grid(row=0, column=1, padx=5)
-        
+
         self.stop_recording_button = ttk.Button(recording_frame, text="Stop Recording", command=self.stop_recording, state="disabled")
         self.stop_recording_button.grid(row=0, column=2, padx=5)
-        
-        # Add Split Recording button
+
+        # Split Recording button
         self.split_recording_button = ttk.Button(recording_frame, text="Split Recording", command=self.split_recording, state="disabled")
         self.split_recording_button.grid(row=0, column=3, padx=5)
-        
-        # Add Minimize to Tray button
+
+        # Minimize to Tray button
         self.minimize_button = ttk.Button(recording_frame, text="Minimize to Tray", command=self.toggle_minimize)
         self.minimize_button.grid(row=0, column=4, padx=5)
-        
-        # Stream Monitor frame
-        self.setup_stream_monitor_gui(main_frame, row=2)
 
-        # Live Transcription control frame
-        self.setup_gui_LiveWhisperTranscriptionAppMixin(main_frame, row=3)
+        # Stream Monitor within Recording tab
+        self.setup_stream_monitor_gui(recording_tab, row=2)
 
-        # EventBoard frame
-        self.setup_eventboard_gui(main_frame, row=4)
+        # ------------------------- Live Audio Tab -------------------------
+        self.setup_gui_LiveWhisperTranscriptionAppMixin(live_audio_tab, row=0)
 
-        next_row: int = 5
-        # Text input label and entry frame
-        input_frame = ttk.Frame(main_frame)
-        input_frame.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        # ------------------------- EventBoard Tab -------------------------
+        self.setup_eventboard_gui(eventboard_tab, row=0)
+
+        # ------------------------- Manual Log Tab -------------------------
+        next_row: int = 0
+        input_frame = ttk.Frame(manual_tab)
+        input_frame.grid(row=next_row, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         next_row = next_row + 1
         input_frame.columnconfigure(1, weight=1)
-        
+
         ttk.Label(input_frame, text="Message:").grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
-        
+
         # Text input box
         self.text_entry = tk.Entry(input_frame, width=50)
         self.text_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 10))
@@ -834,35 +850,54 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         self.text_entry.bind('<Key>', self.on_main_text_change)  # Track first keystroke
         self.text_entry.bind('<BackSpace>', self.on_main_text_clear)
         self.text_entry.bind('<Delete>', self.on_main_text_clear)
-        
+
         # Log button
         self.log_button = ttk.Button(input_frame, text="Log", command=self.log_message)
         self.log_button.grid(row=0, column=2)
-        
+
         # Log display area
-        ttk.Label(main_frame, text="Log History:").grid(row=next_row, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
+        ttk.Label(manual_tab, text="Log History:").grid(row=next_row, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
         next_row = next_row + 1
-        
+
         # Scrolled text widget for log history
-        self.log_display = scrolledtext.ScrolledText(main_frame, height=15, width=70)
-        self.log_display.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        self.log_display = scrolledtext.ScrolledText(manual_tab, height=15, width=70)
+        self.log_display.grid(row=next_row, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        manual_tab.rowconfigure(next_row, weight=1)
         next_row = next_row + 1
 
         # Bottom frame for buttons and info
-        bottom_frame = ttk.Frame(main_frame)
-        bottom_frame.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E))
+        bottom_frame = ttk.Frame(manual_tab)
+        bottom_frame.grid(row=next_row, column=0, sticky=(tk.W, tk.E))
         next_row = next_row + 1
         bottom_frame.columnconfigure(1, weight=1)
-        
+
         # Clear log button
         ttk.Button(bottom_frame, text="Clear Log Display", command=self.clear_log_display).grid(row=0, column=0, sticky=tk.W)
-        
+
         # Status info
         self.status_info_label = ttk.Label(bottom_frame, text="Ready")
         self.status_info_label.grid(row=0, column=2, sticky=tk.E)
-        
+
         # Focus on text entry
         self.text_entry.focus()
+
+        # ------------------------- Settings Tab -------------------------
+        ttk.Label(settings_tab, text="Settings will appear here.").grid(row=0, column=0, sticky=tk.W, pady=(0, 10))
+
+        # Keyboard shortcuts for tab switching (Ctrl+1..5)
+        def _select_tab(index: int):
+            try:
+                self.notebook.select(index)
+            except tk.TclError:
+                pass
+        self.root.bind_all('<Control-1>', lambda e: _select_tab(0))
+        self.root.bind_all('<Control-2>', lambda e: _select_tab(1))
+        self.root.bind_all('<Control-3>', lambda e: _select_tab(2))
+        self.root.bind_all('<Control-4>', lambda e: _select_tab(3))
+        self.root.bind_all('<Control-5>', lambda e: _select_tab(4))
+
+        # Default to Recording tab
+        self.notebook.select(0)
     
     def setup_stream_monitor_gui(self, parent, row: int = 2):
         """Setup Stream Monitor GUI for displaying discovered LSL streams"""
