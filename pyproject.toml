@@ -9,6 +9,7 @@ dependencies = [
     "cython>=3.1.4",
     "dtw-python",
     "keyboard>=0.13.5",
+    "lab-recorder-python",
     "matplotlib>=3.9.4",
     "mne>=1.8.0",
     "mne-lsl>=1.6.1",
@@ -48,3 +49,4 @@ dev-dependencies = [
 dtw-python = { git = "https://github.com/DynamicTimeWarping/dtw-python.git" }
 whisper-timestamped = { git = "https://github.com/CommanderPho/whisper-timestamped.git" }
 phopylslhelper = { git = "https://github.com/CommanderPho/phopylslhelper.git" }
+lab-recorder-python = { path = "../LSL_REPOS/lab-recorder-python", editable = true }

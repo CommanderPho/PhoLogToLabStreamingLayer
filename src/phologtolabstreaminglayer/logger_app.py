@@ -23,6 +23,7 @@ from phopylslhelper.general_helpers import unwrap_single_element_listlike_if_nee
 from phopylslhelper.easy_time_sync import EasyTimeSyncParsingMixin
 from phopylslhelper.mixins.app_helpers import SingletonInstanceMixin, AppThemeMixin, SystemTrayAppMixin
 from whisper_timestamped.mixins.live_whisper_transcription import LiveWhisperTranscriptionAppMixin
+from labrecorder import LabRecorder
 
 # program_lock_port = int(os.environ.get("LIVE_WHISPER_LOCK_PORT", 13372))
 
@@ -50,7 +51,7 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
 
         self.root = root
         self.root.title("LSL Logger with XDF Recording")
-        self.root.geometry("520x720") # WxH
+        self.root.geometry("900x720") # WxH
         
         self.stream_names = ['TextLogger', 'EventBoard', 'WhisperLiveLogger'] # : List[str]
 
@@ -93,6 +94,13 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         self.eventboard_toggle_states = {}  # Track toggle states
         self.eventboard_time_offsets = {}   # Track time offset dropdowns
         
+        # Lab-recorder integration
+        self.lab_recorder: Optional[LabRecorder] = None
+        self.discovered_streams: Dict[str, pylsl.StreamInfo] = {}
+        self.selected_streams: set = set()
+        self.stream_monitor_thread: Optional[threading.Thread] = None
+        self.stream_discovery_active = False
+        
         self.capture_stream_start_timestamps() ## `EasyTimeSyncParsingMixin`: capture timestamps for use in LSL streams
         self.capture_recording_start_timestamps() ## capture timestamps for use in LSL streams
 
@@ -113,6 +121,12 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
 
         # Setup system tray and global hotkey
         self.setup_SystemTrayAppMixin()
+        
+        # Initialize lab-recorder integration
+        self.init_lab_recorder()
+        
+        # Start stream discovery after a short delay to allow outlets to be created
+        self.root.after(2000, self.start_stream_discovery)
 
 
     @property
@@ -794,59 +808,78 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
     # Resume _____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
     def setup_gui(self):
         """Create the GUI elements"""
-        # Main frame
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        # Configure grid weights
+        # Configure root grid
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(4, weight=1)
-        
+
+        # Create tabbed notebook
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+        # Create tabs
+        recording_tab = ttk.Frame(self.notebook, padding="10")
+        live_audio_tab = ttk.Frame(self.notebook, padding="10")
+        eventboard_tab = ttk.Frame(self.notebook, padding="10")
+        manual_tab = ttk.Frame(self.notebook, padding="10")
+        settings_tab = ttk.Frame(self.notebook, padding="10")
+
+        self.notebook.add(recording_tab, text="Recording")
+        self.notebook.add(live_audio_tab, text="Live Audio")
+        self.notebook.add(eventboard_tab, text="EventBoard")
+        self.notebook.add(manual_tab, text="Manual Log")
+        self.notebook.add(settings_tab, text="Settings")
+
+        # Configure tab grids
+        for tab in (recording_tab, live_audio_tab, eventboard_tab, manual_tab, settings_tab):
+            tab.columnconfigure(0, weight=1)
+
+        # ------------------------- Recording Tab -------------------------
         # LSL Status label
-        self.lsl_status_label = ttk.Label(main_frame, text="LSL Status: Initializing...", foreground="orange")
-        self.lsl_status_label.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
-        
+        self.lsl_status_label = ttk.Label(recording_tab, text="LSL Status: Initializing...", foreground="orange")
+        self.lsl_status_label.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+
         # Recording control frame
-        recording_frame = ttk.LabelFrame(main_frame, text="XDF Recording", padding="5")
-        recording_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        recording_frame = ttk.LabelFrame(recording_tab, text="XDF Recording", padding="5")
+        recording_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         recording_frame.columnconfigure(1, weight=1)
-        
+
         # Recording status
         self.recording_status_label = ttk.Label(recording_frame, text="Not Recording", foreground="red")
         self.recording_status_label.grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
-        
+
         # Recording buttons
         self.start_recording_button = ttk.Button(recording_frame, text="Start Recording", command=self.start_recording)
         self.start_recording_button.grid(row=0, column=1, padx=5)
-        
+
         self.stop_recording_button = ttk.Button(recording_frame, text="Stop Recording", command=self.stop_recording, state="disabled")
         self.stop_recording_button.grid(row=0, column=2, padx=5)
-        
-        # Add Split Recording button
+
+        # Split Recording button
         self.split_recording_button = ttk.Button(recording_frame, text="Split Recording", command=self.split_recording, state="disabled")
         self.split_recording_button.grid(row=0, column=3, padx=5)
-        
-        # Add Minimize to Tray button
+
+        # Minimize to Tray button
         self.minimize_button = ttk.Button(recording_frame, text="Minimize to Tray", command=self.toggle_minimize)
         self.minimize_button.grid(row=0, column=4, padx=5)
-        
-        # Live Transcription control frame
-        self.setup_gui_LiveWhisperTranscriptionAppMixin(main_frame, row=2)
 
-        # EventBoard frame
-        self.setup_eventboard_gui(main_frame, row=3)
+        # Stream Monitor within Recording tab
+        self.setup_stream_monitor_gui(recording_tab, row=2)
 
-        next_row: int = 4
-        # Text input label and entry frame
-        input_frame = ttk.Frame(main_frame)
-        input_frame.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        # ------------------------- Live Audio Tab -------------------------
+        self.setup_gui_LiveWhisperTranscriptionAppMixin(live_audio_tab, row=0)
+
+        # ------------------------- EventBoard Tab -------------------------
+        self.setup_eventboard_gui(eventboard_tab, row=0)
+
+        # ------------------------- Manual Log Tab -------------------------
+        next_row: int = 0
+        input_frame = ttk.Frame(manual_tab)
+        input_frame.grid(row=next_row, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         next_row = next_row + 1
         input_frame.columnconfigure(1, weight=1)
-        
+
         ttk.Label(input_frame, text="Message:").grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
-        
+
         # Text input box
         self.text_entry = tk.Entry(input_frame, width=50)
         self.text_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 10))
@@ -854,35 +887,116 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         self.text_entry.bind('<Key>', self.on_main_text_change)  # Track first keystroke
         self.text_entry.bind('<BackSpace>', self.on_main_text_clear)
         self.text_entry.bind('<Delete>', self.on_main_text_clear)
-        
+
         # Log button
         self.log_button = ttk.Button(input_frame, text="Log", command=self.log_message)
         self.log_button.grid(row=0, column=2)
-        
+
         # Log display area
-        ttk.Label(main_frame, text="Log History:").grid(row=next_row, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
+        ttk.Label(manual_tab, text="Log History:").grid(row=next_row, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
         next_row = next_row + 1
-        
+
         # Scrolled text widget for log history
-        self.log_display = scrolledtext.ScrolledText(main_frame, height=15, width=70)
-        self.log_display.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        self.log_display = scrolledtext.ScrolledText(manual_tab, height=15, width=70)
+        self.log_display.grid(row=next_row, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        manual_tab.rowconfigure(next_row, weight=1)
         next_row = next_row + 1
 
         # Bottom frame for buttons and info
-        bottom_frame = ttk.Frame(main_frame)
-        bottom_frame.grid(row=next_row, column=0, columnspan=3, sticky=(tk.W, tk.E))
+        bottom_frame = ttk.Frame(manual_tab)
+        bottom_frame.grid(row=next_row, column=0, sticky=(tk.W, tk.E))
         next_row = next_row + 1
         bottom_frame.columnconfigure(1, weight=1)
-        
+
         # Clear log button
         ttk.Button(bottom_frame, text="Clear Log Display", command=self.clear_log_display).grid(row=0, column=0, sticky=tk.W)
-        
+
         # Status info
         self.status_info_label = ttk.Label(bottom_frame, text="Ready")
         self.status_info_label.grid(row=0, column=2, sticky=tk.E)
-        
+
         # Focus on text entry
         self.text_entry.focus()
+
+        # ------------------------- Settings Tab -------------------------
+        ttk.Label(settings_tab, text="Settings will appear here.").grid(row=0, column=0, sticky=tk.W, pady=(0, 10))
+
+        # Keyboard shortcuts for tab switching (Ctrl+1..5)
+        def _select_tab(index: int):
+            try:
+                self.notebook.select(index)
+            except tk.TclError:
+                pass
+        self.root.bind_all('<Control-1>', lambda e: _select_tab(0))
+        self.root.bind_all('<Control-2>', lambda e: _select_tab(1))
+        self.root.bind_all('<Control-3>', lambda e: _select_tab(2))
+        self.root.bind_all('<Control-4>', lambda e: _select_tab(3))
+        self.root.bind_all('<Control-5>', lambda e: _select_tab(4))
+
+        # Default to Recording tab
+        self.notebook.select(0)
+    
+    def setup_stream_monitor_gui(self, parent, row: int = 2):
+        """Setup Stream Monitor GUI for displaying discovered LSL streams"""
+        # Stream Monitor frame
+        stream_frame = ttk.LabelFrame(parent, text="LSL Stream Monitor", padding="10")
+        stream_frame.grid(row=row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        stream_frame.columnconfigure(0, weight=1)
+        
+        # Stream list with scrollbar
+        list_frame = ttk.Frame(stream_frame)
+        list_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        list_frame.columnconfigure(0, weight=1)
+        list_frame.rowconfigure(0, weight=1)
+        
+        # Create Treeview for stream display
+        columns = ('Name', 'Type', 'Channels', 'Rate', 'Status')
+        self.stream_tree = ttk.Treeview(list_frame, columns=columns, show='tree headings', height=6)
+        
+        # Configure column headings and widths
+        self.stream_tree.heading('#0', text='Select')
+        self.stream_tree.column('#0', width=60, minwidth=60)
+        
+        for col in columns:
+            self.stream_tree.heading(col, text=col)
+            if col == 'Name':
+                self.stream_tree.column(col, width=120, minwidth=100)
+            elif col == 'Type':
+                self.stream_tree.column(col, width=80, minwidth=60)
+            elif col == 'Channels':
+                self.stream_tree.column(col, width=70, minwidth=50)
+            elif col == 'Rate':
+                self.stream_tree.column(col, width=70, minwidth=50)
+            elif col == 'Status':
+                self.stream_tree.column(col, width=80, minwidth=60)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.stream_tree.yview)
+        self.stream_tree.configure(yscrollcommand=scrollbar.set)
+        
+        # Grid the treeview and scrollbar
+        self.stream_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        
+        # Bind selection events
+        self.stream_tree.bind('<Button-1>', self.on_stream_tree_click)
+        
+        # Control buttons frame
+        button_frame = ttk.Frame(stream_frame)
+        button_frame.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        
+        # Stream control buttons
+        ttk.Button(button_frame, text="Refresh Streams", command=self.refresh_streams).grid(row=0, column=0, padx=(0, 5))
+        ttk.Button(button_frame, text="Select All", command=self.select_all_streams).grid(row=0, column=1, padx=5)
+        ttk.Button(button_frame, text="Select None", command=self.select_no_streams).grid(row=0, column=2, padx=5)
+        ttk.Button(button_frame, text="Auto-Select Own", command=self.auto_select_own_streams).grid(row=0, column=3, padx=(5, 0))
+        
+        # Stream info label
+        self.stream_info_label = ttk.Label(stream_frame, text="No streams discovered yet")
+        self.stream_info_label.grid(row=2, column=0, sticky=tk.W, pady=(5, 0))
+        
+        # Initialize stream tracking
+        self.stream_tree_items = {}  # Maps stream_key to tree item id
     
     # Eventboard methods _________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
 
@@ -1272,8 +1386,14 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
 
 
     def start_recording(self):
-        """Start XDF recording"""
-        if not self.has_any_inlets:
+        """Start XDF recording using LabRecorder or fallback to legacy method"""
+        # Check if we have streams to record
+        if self.is_lab_recorder_available():
+            selected_streams = self.get_selected_streams()
+            if not selected_streams:
+                messagebox.showerror("Error", "No LSL streams selected for recording")
+                return
+        elif not self.has_any_inlets:
             messagebox.showerror("Error", "No LSL inlet available for recording")
             return
         
@@ -1295,12 +1415,21 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         self.recording_thread = threading.Thread(target=self.recording_worker, daemon=True)
         self.recording_thread.start()
         
-        self.update_log_display("XDF Recording started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        recording_method = "LabRecorder" if self.is_lab_recorder_available() else "Legacy"
+        self.update_log_display(f"XDF Recording started ({recording_method})", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 
     def auto_start_recording(self):
-        """Automatically start recording on app launch if inlet is available"""
-        if not self.has_any_inlets:
+        """Automatically start recording on app launch if streams are available"""
+        # Check if we have streams to record
+        if self.is_lab_recorder_available():
+            # Auto-select own streams for recording
+            self.auto_select_own_streams()
+            selected_streams = self.get_selected_streams()
+            if not selected_streams:
+                print("Cannot auto-start recording: no streams selected")
+                return
+        elif not self.has_any_inlets:
             print("Cannot auto-start recording: no inlet available")
             return
         
@@ -1338,7 +1467,95 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
 
 
     def recording_worker(self):
-        """Background thread for recording LSL data with incremental backup"""
+        """Background thread for recording LSL data using LabRecorder with robust error handling"""
+        if not self.is_lab_recorder_available():
+            print("LabRecorder not available, falling back to legacy recording")
+            self.legacy_recording_worker()
+            return
+        
+        try:
+            # Configure LabRecorder with selected streams
+            selected_stream_infos = self.get_selected_streams()
+            if not selected_stream_infos:
+                print("No streams selected for recording")
+                # Notify user via GUI
+                if not self._shutting_down:
+                    self.root.after(0, lambda: self.update_log_display(
+                        "Recording failed: No streams selected", 
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    ))
+                return
+            
+            # Start LabRecorder recording with retry mechanism
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self.lab_recorder.start_recording(
+                        filename=self.xdf_filename,
+                        streams=selected_stream_infos
+                    )
+                    print(f"LabRecorder started recording to: {self.xdf_filename}")
+                    break
+                except Exception as e:
+                    print(f"LabRecorder start attempt {attempt + 1} failed: {e}")
+                    if attempt == max_retries - 1:
+                        raise
+                    time.sleep(1.0)  # Wait before retry
+            
+            # Monitor recording while active
+            consecutive_errors = 0
+            max_consecutive_errors = 10
+            
+            while self.recording and not self._shutting_down:
+                try:
+                    # Check if LabRecorder is still recording
+                    if hasattr(self.lab_recorder, 'is_recording') and not self.lab_recorder.is_recording:
+                        print("LabRecorder stopped recording unexpectedly")
+                        # Notify user via GUI
+                        if not self._shutting_down:
+                            self.root.after(0, lambda: self.update_log_display(
+                                "Warning: LabRecorder stopped unexpectedly", 
+                                datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            ))
+                        break
+                    
+                    # Reset error counter on successful check
+                    consecutive_errors = 0
+                    
+                    # Sleep briefly to avoid busy waiting
+                    time.sleep(0.1)
+                    
+                except Exception as e:
+                    consecutive_errors += 1
+                    print(f"Error monitoring LabRecorder (attempt {consecutive_errors}): {e}")
+                    
+                    if consecutive_errors >= max_consecutive_errors:
+                        print("Too many consecutive monitoring errors. Stopping recording.")
+                        break
+                    
+                    time.sleep(0.5)  # Wait longer on error
+            
+            # Stop LabRecorder when done
+            try:
+                if hasattr(self.lab_recorder, 'stop_recording'):
+                    self.lab_recorder.stop_recording()
+                    print("LabRecorder recording stopped")
+            except Exception as e:
+                print(f"Error stopping LabRecorder: {e}")
+                
+        except Exception as e:
+            print(f"Critical error in LabRecorder recording: {e}")
+            # Notify user via GUI
+            if not self._shutting_down:
+                self.root.after(0, lambda: self.update_log_display(
+                    f"LabRecorder error: {str(e)[:100]}... Falling back to legacy recording", 
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                ))
+            # Fall back to legacy recording
+            self.legacy_recording_worker()
+    
+    def legacy_recording_worker(self):
+        """Legacy background thread for recording LSL data with incremental backup"""
         sample_count = 0
         
         while self.recording and self.has_any_inlets:
@@ -1361,31 +1578,12 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
                             should_save_backup = True
                                     
                 except Exception as e:
-                    print(f"Error in recording worker: {e}")
+                    print(f"Error in legacy recording worker: {e}")
                     break
 
             ## END for a_stream_name, a_setup_fn in stream_setup_fn_dict...
             if should_save_backup:
                 self.save_backup()
-
-            # ## single:
-            # try:
-            #     sample, timestamp = self.inlet.pull_sample(timeout=1.0)
-            #     if sample:
-            #         data_point = {
-            #             'sample': sample,
-            #             'timestamp': timestamp
-            #         }
-            #         self.recorded_data.append(data_point)
-            #         sample_count += 1
-                    
-            #         # Auto-save every 10 samples to backup file
-            #         if sample_count % 10 == 0:
-            #             self.save_backup()
-                        
-            # except Exception as e:
-            #     print(f"Error in recording worker: {e}")
-            #     break
 
 
     def stop_recording(self):
@@ -1403,16 +1601,20 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         if self.recording_thread and self.recording_thread.is_alive():
             self.recording_thread.join(timeout=2.0)
         
-
-        # Save XDF file
-        self.save_xdf_file()
-        
-        # Clean up backup file
-        try:
-            if hasattr(self, 'backup_filename') and os.path.exists(self.backup_filename):
-                os.remove(self.backup_filename)
-        except Exception as e:
-            print(f"Error removing backup file: {e}")
+        # Handle file saving based on recording method
+        if self.is_lab_recorder_available():
+            # LabRecorder handles XDF file creation automatically
+            print(f"LabRecorder XDF file saved: {self.xdf_filename}")
+        else:
+            # Legacy method - save XDF file using MNE
+            self.save_xdf_file()
+            
+            # Clean up backup file
+            try:
+                if hasattr(self, 'backup_filename') and os.path.exists(self.backup_filename):
+                    os.remove(self.backup_filename)
+            except Exception as e:
+                print(f"Error removing backup file: {e}")
         
         # Update GUI
         try:
@@ -1425,7 +1627,8 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         except tk.TclError:
             pass  # GUI is being destroyed
         
-        self.update_log_display("XDF Recording stopped and saved", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        recording_method = "LabRecorder" if self.is_lab_recorder_available() else "Legacy"
+        self.update_log_display(f"XDF Recording stopped and saved ({recording_method})", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 
     def split_recording(self):
@@ -1758,6 +1961,265 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         """Clear the log display area"""
         self.log_display.delete(1.0, tk.END)
     
+    # ---------------------------------------------------------------------------- #
+    #                          Lab-Recorder Integration                            #
+    # ---------------------------------------------------------------------------- #
+    
+    def init_lab_recorder(self):
+        """Initialize lab-recorder for XDF recording"""
+        try:
+            if self.lab_recorder is None:
+                # Create LabRecorder instance but don't start recording yet
+                self.lab_recorder = LabRecorder()
+                print("LabRecorder initialized successfully")
+            return True
+        except Exception as e:
+            print(f"Error initializing LabRecorder: {e}")
+            return False
+    
+    def cleanup_lab_recorder(self):
+        """Clean up lab-recorder resources"""
+        try:
+            if self.lab_recorder is not None:
+                # Stop any active recording
+                if hasattr(self.lab_recorder, 'is_recording') and self.lab_recorder.is_recording:
+                    self.lab_recorder.stop_recording()
+                self.lab_recorder = None
+                print("LabRecorder cleaned up successfully")
+        except Exception as e:
+            print(f"Error cleaning up LabRecorder: {e}")
+    
+    def is_lab_recorder_available(self) -> bool:
+        """Check if lab-recorder is available and initialized"""
+        return self.lab_recorder is not None
+    
+    def start_stream_discovery(self):
+        """Start continuous stream discovery in background thread"""
+        if self.stream_discovery_active:
+            return
+        
+        self.stream_discovery_active = True
+        self.stream_monitor_thread = threading.Thread(target=self.stream_discovery_worker, daemon=True)
+        self.stream_monitor_thread.start()
+        print("Stream discovery started")
+    
+    def stop_stream_discovery(self):
+        """Stop stream discovery"""
+        self.stream_discovery_active = False
+        if self.stream_monitor_thread and self.stream_monitor_thread.is_alive():
+            self.stream_monitor_thread.join(timeout=2.0)
+        print("Stream discovery stopped")
+    
+    def stream_discovery_worker(self):
+        """Background worker for continuous stream discovery with robust error handling"""
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+        
+        while self.stream_discovery_active and not self._shutting_down:
+            try:
+                # Discover all available LSL streams
+                streams = pylsl.resolve_streams(wait_time=1.0)
+                
+                # Reset error counter on successful discovery
+                consecutive_errors = 0
+                
+                # Update discovered streams dictionary
+                new_discovered = {}
+                for stream in streams:
+                    try:
+                        stream_key = f"{stream.name()}_{stream.source_id()}"
+                        new_discovered[stream_key] = stream
+                    except Exception as e:
+                        print(f"Error processing stream {stream}: {e}")
+                        continue
+                
+                # Check for changes and notify of disconnections
+                if new_discovered != self.discovered_streams:
+                    # Detect disconnected streams
+                    disconnected_streams = set(self.discovered_streams.keys()) - set(new_discovered.keys())
+                    if disconnected_streams:
+                        print(f"Streams disconnected: {disconnected_streams}")
+                        # Remove disconnected streams from selection
+                        for stream_key in disconnected_streams:
+                            self.selected_streams.discard(stream_key)
+                    
+                    # Detect new streams
+                    new_streams = set(new_discovered.keys()) - set(self.discovered_streams.keys())
+                    if new_streams:
+                        print(f"New streams discovered: {new_streams}")
+                    
+                    self.discovered_streams = new_discovered
+                    # Schedule GUI update on main thread
+                    if not self._shutting_down:
+                        self.root.after(0, self.update_stream_display)
+                
+                # Wait before next discovery cycle
+                time.sleep(2.0)
+                
+            except Exception as e:
+                consecutive_errors += 1
+                print(f"Error in stream discovery (attempt {consecutive_errors}): {e}")
+                
+                # If too many consecutive errors, increase wait time and potentially stop
+                if consecutive_errors >= max_consecutive_errors:
+                    print(f"Too many consecutive stream discovery errors ({consecutive_errors}). Stopping discovery.")
+                    self.stream_discovery_active = False
+                    # Notify user via GUI
+                    if not self._shutting_down:
+                        self.root.after(0, lambda: self.update_log_display(
+                            "Stream discovery stopped due to repeated errors", 
+                            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        ))
+                    break
+                
+                # Exponential backoff for errors
+                wait_time = min(30.0, 2.0 ** consecutive_errors)
+                time.sleep(wait_time)
+    
+    def update_stream_display(self):
+        """Update the GUI stream display"""
+        # Update the tree view display
+        if hasattr(self, 'stream_tree'):
+            self.update_stream_tree_display()
+        
+        # Also print to console for debugging
+        if self.discovered_streams:
+            print(f"Discovered {len(self.discovered_streams)} streams:")
+            for stream_key, stream in self.discovered_streams.items():
+                print(f"  - {stream.name()} ({stream.type()}) - {stream.channel_count()} channels @ {stream.nominal_srate()}Hz")
+    
+    def get_discovered_streams(self) -> Dict[str, pylsl.StreamInfo]:
+        """Get currently discovered streams"""
+        return self.discovered_streams.copy()
+    
+    def select_stream(self, stream_key: str, selected: bool = True):
+        """Select or deselect a stream for recording"""
+        if selected:
+            self.selected_streams.add(stream_key)
+        else:
+            self.selected_streams.discard(stream_key)
+        print(f"Stream {stream_key} {'selected' if selected else 'deselected'}")
+    
+    def get_selected_streams(self) -> List[pylsl.StreamInfo]:
+        """Get list of selected stream info objects"""
+        selected = []
+        for stream_key in self.selected_streams:
+            if stream_key in self.discovered_streams:
+                selected.append(self.discovered_streams[stream_key])
+        return selected
+    
+    def auto_select_own_streams(self):
+        """Automatically select the application's own streams"""
+        for stream_key, stream in self.discovered_streams.items():
+            stream_name = stream.name()
+            if stream_name in self.stream_names:  # TextLogger, EventBoard, WhisperLiveLogger
+                self.select_stream(stream_key, True)
+        self.update_stream_tree_display()
+    
+    def on_stream_tree_click(self, event):
+        """Handle clicks on the stream tree"""
+        item = self.stream_tree.identify('item', event.x, event.y)
+        if item:
+            # Find the stream_key for this item
+            stream_key = None
+            for key, tree_item in self.stream_tree_items.items():
+                if tree_item == item:
+                    stream_key = key
+                    break
+            
+            if stream_key:
+                # Toggle selection
+                currently_selected = stream_key in self.selected_streams
+                self.select_stream(stream_key, not currently_selected)
+                self.update_stream_tree_display()
+    
+    def refresh_streams(self):
+        """Manually refresh stream discovery with error handling"""
+        try:
+            # Update GUI to show refreshing status
+            if hasattr(self, 'stream_info_label'):
+                self.stream_info_label.config(text="Refreshing streams...")
+            
+            # Discover all available LSL streams
+            streams = pylsl.resolve_streams(wait_time=2.0)
+            
+            # Update discovered streams dictionary
+            new_discovered = {}
+            for stream in streams:
+                try:
+                    stream_key = f"{stream.name()}_{stream.source_id()}"
+                    new_discovered[stream_key] = stream
+                except Exception as e:
+                    print(f"Error processing stream during refresh: {e}")
+                    continue
+            
+            self.discovered_streams = new_discovered
+            self.update_stream_tree_display()
+            
+            # Update status
+            self.update_log_display(f"Stream refresh completed: {len(new_discovered)} streams found", 
+                                  datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            
+        except Exception as e:
+            error_msg = f"Error refreshing streams: {e}"
+            print(error_msg)
+            self.update_log_display(error_msg, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            
+            # Update GUI to show error status
+            if hasattr(self, 'stream_info_label'):
+                self.stream_info_label.config(text="Stream refresh failed")
+    
+    def select_all_streams(self):
+        """Select all discovered streams"""
+        for stream_key in self.discovered_streams.keys():
+            self.select_stream(stream_key, True)
+        self.update_stream_tree_display()
+    
+    def select_no_streams(self):
+        """Deselect all streams"""
+        self.selected_streams.clear()
+        self.update_stream_tree_display()
+    
+    def update_stream_tree_display(self):
+        """Update the stream tree display with current streams"""
+        # Clear existing items
+        for item in self.stream_tree.get_children():
+            self.stream_tree.delete(item)
+        self.stream_tree_items.clear()
+        
+        # Add current streams
+        for stream_key, stream in self.discovered_streams.items():
+            try:
+                # Determine selection status
+                is_selected = stream_key in self.selected_streams
+                checkbox = "☑" if is_selected else "☐"
+                
+                # Get stream info
+                name = stream.name()
+                stream_type = stream.type()
+                channels = str(stream.channel_count())
+                rate = f"{stream.nominal_srate():.0f}Hz" if stream.nominal_srate() > 0 else "Irregular"
+                status = "Connected"
+                
+                # Insert item into tree
+                item_id = self.stream_tree.insert('', 'end', text=checkbox, 
+                                                values=(name, stream_type, channels, rate, status))
+                self.stream_tree_items[stream_key] = item_id
+                
+                # Color code based on selection
+                if is_selected:
+                    self.stream_tree.set(item_id, '#0', '☑')
+                else:
+                    self.stream_tree.set(item_id, '#0', '☐')
+                    
+            except Exception as e:
+                print(f"Error updating stream display for {stream_key}: {e}")
+        
+        # Update info label
+        total_streams = len(self.discovered_streams)
+        selected_count = len(self.selected_streams)
+        self.stream_info_label.config(text=f"Streams: {total_streams} discovered, {selected_count} selected")
+    
     def on_closing(self):
         """Handle window closing"""
         # Set shutdown flag to prevent GUI updates
@@ -1780,6 +2242,12 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         # Clean up system tray
         if self.system_tray:
             self.system_tray.stop()
+        
+        # Stop stream discovery
+        self.stop_stream_discovery()
+        
+        # Clean up lab-recorder
+        self.cleanup_lab_recorder()
         
         # Clean up LSL resources
 
