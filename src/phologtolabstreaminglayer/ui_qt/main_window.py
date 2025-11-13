@@ -105,13 +105,14 @@ class MainWindow(QtWidgets.QMainWindow):
 		self.eventboard_original_colors: Dict[str, str] = {}
 		self.eventboard_time_offsets: Dict[str, QtWidgets.QLineEdit] = {}
 
+		# Load configuration early so EventBoard renders on first build
+		self._load_eventboard_config()
 		self._build_ui()
 		self._wire_menu_and_tray()
 		self._connect_signals()
 		self._setup_global_hotkey()
 
-		# Load configuration and setup LSL
-		self._load_eventboard_config()
+		# Setup LSL
 		self._setup_lsl_outlets()
 
 		# Timers replacing tkinter .after()
@@ -223,6 +224,10 @@ class MainWindow(QtWidgets.QMainWindow):
 		btn_row.addWidget(self.btn_select_none)
 		btn_row.addWidget(self.btn_auto_select_own)
 		btn_row.addStretch(1)
+
+		# Info label with counts to match Tk UI
+		self.streams_info_label = QtWidgets.QLabel("Streams: 0 discovered, 0 selected", group)
+		vbox.addWidget(self.streams_info_label)
 
 		self.btn_refresh_streams.clicked.connect(self.refresh_streams)
 		self.btn_select_all.clicked.connect(self.select_all_streams)
@@ -507,13 +512,8 @@ class MainWindow(QtWidgets.QMainWindow):
 		self._update_stream_info_label()
 
 	def _update_stream_info_label(self) -> None:
-		selected_names = []
-		for key in self.selected_streams:
-			info = self.discovered_streams.get(key)
-			if info is not None:
-				selected_names.append(info.name())
-		text = "No streams discovered yet" if not self.discovered_streams else f"Selected: {', '.join(selected_names) or 'None'}"
-		self.statusBar().showMessage(text)
+		# Update bottom label with counts, keep status bar succinct
+		self.streams_info_label.setText(f"Streams: {len(self.discovered_streams)} discovered, {len(self.selected_streams)} selected")
 
 	def refresh_streams(self) -> None:
 		# On-demand refresh
