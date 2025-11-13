@@ -10,14 +10,15 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 import pylsl
 
 
-class QtLogHandler(logging.Handler):
+class QtLogHandler(QtCore.QObject, logging.Handler):
 	"""
 	Thread-safe logging handler that appends log messages into a QPlainTextEdit.
 	"""
 	appendRequested = QtCore.pyqtSignal(str)  # type: ignore[attr-defined]
 
 	def __init__(self, target_text_edit: QtWidgets.QPlainTextEdit) -> None:
-		super().__init__()
+		QtCore.QObject.__init__(self)
+		logging.Handler.__init__(self)
 		self._target = target_text_edit
 		# Bridge from any thread → main thread
 		self.appendRequested.connect(self._on_append_requested)  # type: ignore[attr-defined]
@@ -34,6 +35,35 @@ class QtLogHandler(logging.Handler):
 		self.appendRequested.emit(msg)
 
 
+class QuickLogDialog(QtWidgets.QDialog):
+	"""
+	Small popover dialog to quickly log a message. Mirrors Tk hotkey popover UX.
+	"""
+	def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+		super().__init__(parent)
+		self.setWindowTitle("Quick Log Entry")
+		self.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
+		self.setFixedWidth(400)
+		layout = QtWidgets.QVBoxLayout(self)
+		layout.setContentsMargins(20, 20, 20, 20)
+		title = QtWidgets.QLabel("Quick Log Entry", self)
+		font = title.font()
+		font.setBold(True)
+		font.setPointSize(font.pointSize() + 2)
+		title.setFont(font)
+		layout.addWidget(title)
+		self.edit = QtWidgets.QLineEdit(self)
+		layout.addWidget(QtWidgets.QLabel("Message:", self))
+		layout.addWidget(self.edit)
+		layout.addWidget(QtWidgets.QLabel("Press Enter to log, Esc to cancel", self))
+		self.edit.returnPressed.connect(self.accept)
+		self.edit.selectAll()
+		self.edit.setFocus(QtCore.Qt.FocusReason.ActiveWindowFocusReason)
+
+	def getText(self) -> str:
+		return self.edit.text().strip()
+
+
 class MainWindow(QtWidgets.QMainWindow):
 	"""
 	PyQt6 port of the LSL Logger UI. This window mirrors the original Tkinter UI:
@@ -47,6 +77,8 @@ class MainWindow(QtWidgets.QMainWindow):
 	# Signals for cross-thread UI updates
 	streamsDiscovered = QtCore.pyqtSignal(dict)  # mapping key -> pylsl.StreamInfo  # type: ignore[attr-defined]
 	logMessage = QtCore.pyqtSignal(str)  # type: ignore[attr-defined]
+
+	showQuickLogPopover = QtCore.pyqtSignal()  # type: ignore[attr-defined]
 
 	def __init__(self, xdf_folder: Path, parent: Optional[QtWidgets.QWidget] = None) -> None:
 		super().__init__(parent)
@@ -76,6 +108,7 @@ class MainWindow(QtWidgets.QMainWindow):
 		self._build_ui()
 		self._wire_menu_and_tray()
 		self._connect_signals()
+		self._setup_global_hotkey()
 
 		# Load configuration and setup LSL
 		self._load_eventboard_config()
@@ -256,6 +289,9 @@ class MainWindow(QtWidgets.QMainWindow):
 	def _wire_menu_and_tray(self) -> None:
 		# Menu with basic actions and shortcuts
 		menu = self.menuBar().addMenu("&File")
+		act_change_xdf = QtGui.QAction("Change XDF &Folder…", self)
+		act_change_xdf.triggered.connect(self._choose_xdf_folder)
+		menu.addAction(act_change_xdf)
 		act_quit = QtGui.QAction("&Quit", self)
 		act_quit.setShortcut(QtGui.QKeySequence.StandardKey.Quit)
 		act_quit.triggered.connect(self.close)
@@ -268,7 +304,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
 		# System tray icon
 		self.tray = QtWidgets.QSystemTrayIcon(self)
-		icon = self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_ComputerIcon)
+		# Prefer app icon file if available, else fallback
+		icon_path = Path("icons/LogToLabStreamingLayerIcon_Light.ico")
+		if icon_path.exists():
+			icon = QtGui.QIcon(str(icon_path))
+		else:
+			icon = self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_ComputerIcon)
 		self.tray.setIcon(icon)
 		tray_menu = QtWidgets.QMenu(self)
 		act_show = tray_menu.addAction("Show")
@@ -278,10 +319,13 @@ class MainWindow(QtWidgets.QMainWindow):
 		act_hide.triggered.connect(self.hide)
 		act_quit_tray.triggered.connect(self.close)
 		self.tray.setContextMenu(tray_menu)
+		# Also set window icon
+		self.setWindowIcon(icon)
 
 	def _connect_signals(self) -> None:
 		self.streamsDiscovered.connect(self._on_streams_discovered)
 		self.logMessage.connect(self._append_log)
+		self.showQuickLogPopover.connect(self._on_show_quick_log)
 
 	@QtCore.pyqtSlot(dict)  # type: ignore[attr-defined]
 	def _on_streams_discovered(self, mapping: dict) -> None:
@@ -290,6 +334,36 @@ class MainWindow(QtWidgets.QMainWindow):
 	@QtCore.pyqtSlot(str)  # type: ignore[attr-defined]
 	def _append_log(self, text: str) -> None:
 		self.log_display.appendPlainText(text)
+	
+	def _choose_xdf_folder(self) -> None:
+		folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Select output XDF Folder - PhoLogToLabStreamingLayer_logs", str(self.xdf_folder))
+		if folder:
+			self.xdf_folder = Path(folder).resolve()
+			self.statusBar().showMessage(f"XDF Folder: {self.xdf_folder}")
+	
+	def _setup_global_hotkey(self) -> None:
+		"""
+		Register a global hotkey (Ctrl+Alt+L) using the keyboard module.
+		Calls back into Qt via a signal.
+		"""
+		def worker():
+			try:
+				import keyboard  # lazy import to avoid packaging surprise if missing
+				keyboard.add_hotkey('ctrl+alt+l', lambda: self.showQuickLogPopover.emit())
+			except Exception:
+				# Hotkey optional; do not crash if unavailable
+				pass
+		t = threading.Thread(target=worker, daemon=True)
+		t.start()
+	
+	@QtCore.pyqtSlot()  # type: ignore[attr-defined]
+	def _on_show_quick_log(self) -> None:
+		dlg = QuickLogDialog(self)
+		if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+			text = dlg.getText()
+			if text:
+				self._send_textlogger_message(text, datetime.now())
+				self._append_log(f"{datetime.now():%Y-%m-%d %H:%M:%S} | INFO | {text}")
 
 	# -------------------------- Recording / LSL --------------------------
 	def _setup_lsl_outlets(self) -> None:

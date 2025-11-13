@@ -17,6 +17,7 @@ dependencies = [
     "pillow>=11.3.0",
     "pyinstaller>=6.14.2",
     "pylsl>=1.17.6",
+    "pyqt6>=6.10.0",
     "pystray>=0.19.5",
     "pytz>=2025.2",
     "pyxdf>=1.17.0",
