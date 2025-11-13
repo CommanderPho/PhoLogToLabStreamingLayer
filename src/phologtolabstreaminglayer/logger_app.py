@@ -653,7 +653,7 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
 
             # Create system tray menu
             menu = pystray.Menu(
-                pystray.MenuItem("Show App", self.show_app),
+                pystray.MenuItem("Show App", self.on_tray_activate, default=True),
                 pystray.MenuItem("Quick Log", self.show_hotkey_popover),
                 pystray.MenuItem("Exit", self.quit_app)
             )
@@ -666,14 +666,51 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
                 menu
             )
 
-            # Add double-click handler to show app
-            self.system_tray.on_activate = self.show_app ## double-clicking doesn't foreground the app by default. Also clicking the windows close "X" just hides it to taskbar by default which I don't want. 
+            # Add click/activation handlers to show app
+            # Single left-click handler (if supported by backend)
+            try:
+                self.system_tray.on_clicked = self.on_tray_clicked
+            except Exception as _e:
+                # Fallback silently if backend does not support on_clicked
+                pass
+
+            # Double-click/activate handler
+            self.system_tray.on_activate = self.on_tray_activate ## double-clicking should restore only when hidden
 
             # Start system tray in a separate thread
             threading.Thread(target=self.system_tray.run, daemon=True).start()
 
         except Exception as e:
             print(f"Error setting up system tray: {e}")
+
+    def on_tray_clicked(self, icon=None, button=None, pressed=None, *args, **kwargs):
+        """Handle single left-click on the tray icon to restore app when hidden"""
+        try:
+            # Normalize button value across backends ('left', 'LEFT', 1, etc.)
+            btn = str(button).lower() if isinstance(button, str) else button
+            is_left = (btn in ('left', 'button.left')) or (btn == 1)
+
+            # Only act on press (avoid triggering twice on press/release)
+            is_pressed = (pressed is True) or (pressed is None)
+
+            if is_left and is_pressed:
+                if getattr(self, 'is_minimized', False) or not self.root.winfo_viewable():
+                    self.root.after(0, self.restore_from_tray)
+                else:
+                    # If already visible, just bring to front on single click
+                    self.root.after(0, self.show_app)
+        except Exception as e:
+            print(f"Error handling tray click: {e}")
+
+    def on_tray_activate(self, icon=None, item=None):
+        """Handle tray icon activation (double-click on Windows) to restore app only if hidden"""
+        try:
+            # Restore only when minimized/hidden
+            if getattr(self, 'is_minimized', False) or not self.root.winfo_viewable():
+                # Perform Tkinter operations on the main thread
+                self.root.after(0, self.restore_from_tray)
+        except Exception as e:
+            print(f"Error handling tray activation: {e}")
 
     def create_tray_icon(self):
         """Create icon for the system tray from PNG file based on system theme"""
