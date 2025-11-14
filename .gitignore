@@ -4,3 +4,4 @@ dist
 flutter_version/xdf_files/*.xdf
 **/__pycache__
 .specstory
+desktop.ini
