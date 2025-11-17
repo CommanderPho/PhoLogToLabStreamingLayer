@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../LSL_REPOS/lab-recorder-python"
+		},
+		{
+			"path": "../stream_viewer"
 		}
 	],
 	"settings": {
