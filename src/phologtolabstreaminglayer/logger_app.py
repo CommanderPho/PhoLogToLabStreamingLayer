@@ -35,7 +35,7 @@ _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLog
 # _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
 
 
-class LoggerApp(GlobalHotkeyMixin, AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
+class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
     # Class variable to track if an instance is already running
     # _SingletonInstanceMixin_env_lock_port_variable_name: str = "LIVE_WHISPER_LOCK_PORT"
     _SingletonInstanceMixin_env_lock_port_variable_name: str = "PHO_LOGTOLABSTREAMINGLAYER_LOCK_PORT"
