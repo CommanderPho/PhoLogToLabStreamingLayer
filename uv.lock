@@ -631,7 +631,7 @@ wheels = [
 [[package]]
 name = "lab-recorder-python"
 version = "0.2.0"
-source = { editable = "../LSL_REPOS/lab-recorder-python" }
+source = { editable = "../lab-recorder-python" }
 dependencies = [
     { name = "numpy" },
     { name = "pyinstaller" },
@@ -1182,7 +1182,7 @@ requires-dist = [
     { name = "cython", specifier = ">=3.1.4" },
     { name = "dtw-python", git = "https://github.com/DynamicTimeWarping/dtw-python.git" },
     { name = "keyboard", specifier = ">=0.13.5" },
-    { name = "lab-recorder-python", editable = "../LSL_REPOS/lab-recorder-python" },
+    { name = "lab-recorder-python", editable = "../lab-recorder-python" },
     { name = "matplotlib", specifier = ">=3.9.4" },
     { name = "mne", specifier = ">=1.8.0" },
     { name = "mne-lsl", specifier = ">=1.6.1" },

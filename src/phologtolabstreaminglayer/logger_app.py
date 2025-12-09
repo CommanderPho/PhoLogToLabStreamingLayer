@@ -16,7 +16,6 @@ import mne
 from pathlib import Path
 import pystray
 from PIL import Image, ImageDraw
-import keyboard
 import socket
 import sys
 from phopylslhelper.general_helpers import unwrap_single_element_listlike_if_needed, readable_dt_str, from_readable_dt_str, localize_datetime_to_timezone, tz_UTC, tz_Eastern, _default_tz
@@ -24,6 +23,7 @@ from phopylslhelper.easy_time_sync import EasyTimeSyncParsingMixin
 from phopylslhelper.mixins.app_helpers import SingletonInstanceMixin, AppThemeMixin, SystemTrayAppMixin
 from whisper_timestamped.mixins.live_whisper_transcription import LiveWhisperTranscriptionAppMixin
 from labrecorder import LabRecorder
+from phologtolabstreaminglayer.features.global_hotkey import GlobalHotkeyMixin
 
 # program_lock_port = int(os.environ.get("LIVE_WHISPER_LOCK_PORT", 13372))
 
@@ -34,7 +34,7 @@ _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLog
 # _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
 
 
-class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
+class LoggerApp(GlobalHotkeyMixin, AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
     # Class variable to track if an instance is already running
     # _SingletonInstanceMixin_env_lock_port_variable_name: str = "LIVE_WHISPER_LOCK_PORT"
     _SingletonInstanceMixin_env_lock_port_variable_name: str = "PHO_LOGTOLABSTREAMINGLAYER_LOCK_PORT"
@@ -76,6 +76,9 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
 
         # System tray and hotkey state
         self.init_SystemTrayAppMixin()
+        
+        # Global hotkey state
+        self.init_GlobalHotkeyMixin()
         
         # # Singleton lock socket
         # self._lock_socket = None
@@ -177,142 +180,6 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
             return value * 3600
         else:
             return 0
-
-
-
-    # AppThemeMixin ______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
-    # def setup_app_icon(self):
-    #     """Setup application icon from PNG file based on system theme"""
-    #     try:
-    #         # Detect system theme and choose appropriate icon
-    #         icon_filename = self.get_theme_appropriate_icon()
-    #         icon_path = Path("icons") / icon_filename
-            
-    #         if icon_path.exists():
-    #             # Set window icon
-    #             self.root.iconphoto(True, tk.PhotoImage(file=str(icon_path)))
-    #             print(f"Application icon set from {icon_path}")
-    #         else:
-    #             print(f"Icon file not found: {icon_path}")
-    #     except Exception as e:
-    #         print(f"Error setting application icon: {e}")
-    
-    # def get_theme_appropriate_icon(self):
-    #     """Get the appropriate icon filename based on system theme"""
-    #     try:
-    #         import platform
-            
-    #         if platform.system() == "Windows":
-    #             return self.detect_windows_theme()
-    #         else:
-    #             # For other systems, use a simple heuristic
-    #             return self.detect_theme_simple()
-                
-    #     except Exception as e:
-    #         print(f"Error detecting theme: {e}")
-    #         # Fallback to dark icon
-    #         return "LogToLabStreamingLayerIcon.png"
-    
-    # def detect_windows_theme(self):
-    #     """Detect Windows theme using registry"""
-    #     try:
-    #         import winreg
-            
-    #         # Check Windows 10/11 dark mode setting
-    #         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
-    #             try:
-    #                 # Check if dark mode is enabled
-    #                 dark_mode = winreg.QueryValueEx(key, "AppsUseLightTheme")[0]
-    #                 if dark_mode == 0:  # Dark mode enabled
-    #                     return "LogToLabStreamingLayerIcon.png"
-    #                 else:  # Light mode
-    #                     return "LogToLabStreamingLayerIcon_Light.png"
-    #             except FileNotFoundError:
-    #                 # Registry key doesn't exist, fall back to simple detection
-    #                 return self.detect_theme_simple()
-    #     except Exception as e:
-    #         print(f"Error reading Windows theme registry: {e}")
-    #         return self.detect_theme_simple()
-    
-    # def detect_theme_simple(self):
-    #     """Simple theme detection using tkinter"""
-    #     try:
-    #         import tkinter as tk
-            
-    #         # Create a temporary root to test theme
-    #         temp_root = tk.Tk()
-    #         temp_root.withdraw()  # Hide the window
-            
-    #         try:
-    #             # Check the default background color
-    #             bg_color = temp_root.cget('bg')
-                
-    #             # Simple heuristic: if background is very dark, use light icon
-    #             if bg_color in ['#2e2e2e', '#3c3c3c', '#404040', 'SystemButtonFace']:
-    #                 return "LogToLabStreamingLayerIcon.png"
-    #             else:
-    #                 return "LogToLabStreamingLayerIcon_Light.png"
-    #         finally:
-    #             temp_root.destroy()
-                
-    #     except Exception as e:
-    #         print(f"Error in simple theme detection: {e}")
-    #         # Default to dark icon
-    #         return "LogToLabStreamingLayerIcon_Light.png"
-
-
-    # SingletonInstanceMixin _____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
-    # @classmethod
-    # def is_instance_running(cls):
-    #     """Check if another instance is already running"""
-    #     try:
-    #         # Try to bind to a specific port
-    #         test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #         test_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    #         test_socket.bind(('localhost', cls._lock_port))
-    #         test_socket.close()
-    #         return False
-    #     except OSError:
-    #         # Port is already in use, another instance is running
-    #         return True
-
-    # @classmethod
-    # def mark_instance_running(cls):
-    #     """Mark that an instance is now running"""
-    #     cls._instance_running = True
-
-    # @classmethod
-    # def mark_instance_stopped(cls):
-    #     """Mark that the instance has stopped"""
-    #     cls._instance_running = False
-
-
-    # def acquire_singleton_lock(self):
-    #     """Acquire the singleton lock by binding to the port"""
-    #     try:
-    #         self._lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #         self._lock_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    #         self._lock_socket.bind(('localhost', self._lock_port))
-    #         self._lock_socket.listen(1)
-    #         self.mark_instance_running()
-    #         print("Singleton lock acquired successfully")
-    #         return True
-    #     except OSError as e:
-    #         print(f"Failed to acquire singleton lock: {e}")
-    #         return False
-    
-    # def release_singleton_lock(self):
-    #     """Release the singleton lock and clean up the socket"""
-    #     try:
-    #         if self._lock_socket:
-    #             self._lock_socket.close()
-    #             self._lock_socket = None
-    #         self.mark_instance_stopped()
-    #         print("Singleton lock released")
-    #     except Exception as e:
-    #         print(f"Error releasing singleton lock: {e}")
-    
-
 
 
 
@@ -482,88 +349,6 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
     # Other GUI/Status Methods                                                                                                                                                                                                                                                             #
     # ==================================================================================================================================================================================================================================================================================== #
 
-
-    def setup_global_hotkey(self):
-        """Setup global hotkey for quick log entry"""
-        try:
-            # Register Ctrl+Alt+L as the global hotkey
-            keyboard.add_hotkey('ctrl+alt+l', self.show_hotkey_popover)
-            print("Global hotkey Ctrl+Alt+L registered successfully")
-        except Exception as e:
-            print(f"Error setting up global hotkey: {e}")
-    
-    def show_hotkey_popover(self):
-        """Show the hotkey popover for quick log entry"""
-        if self.hotkey_popover:
-            # If popover already exists, just focus it and select text
-            self.hotkey_popover.focus_force()
-            self.hotkey_popover.lift()
-            self.quick_log_entry.focus()
-            self.quick_log_entry.select_range(0, tk.END)
-            # Additional focus handling for existing popover
-            self.hotkey_popover.after(10, self.ensure_focus)
-            return
-        
-        # Create popover window
-        self.hotkey_popover = tk.Toplevel()
-        self.hotkey_popover.title("Quick Log Entry")
-        self.hotkey_popover.geometry("600x220")
-        
-        # Center the popover on the screen
-        self.center_popover_on_active_monitor()
-        
-        # Make it always on top
-        self.hotkey_popover.attributes('-topmost', True)
-        
-        # Remove window decorations for a cleaner look
-        self.hotkey_popover.overrideredirect(True)
-        
-        # Force the popover to grab focus first
-        self.hotkey_popover.focus_force()
-        self.hotkey_popover.grab_set()  # Make it modal
-        
-        # Create content
-        content_frame = ttk.Frame(self.hotkey_popover, padding="20")
-        content_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Title label
-        title_label = ttk.Label(content_frame, text="Quick Log Entry", font=("Arial", 14, "bold"))
-        title_label.pack(pady=(0, 15))
-        
-        # Entry field
-        entry_frame = ttk.Frame(content_frame)
-        entry_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        entry_label = ttk.Label(entry_frame, text="Message:")
-        entry_label.pack(anchor=tk.W)
-        
-        self.quick_log_entry = tk.Entry(entry_frame, font=("Arial", 12))
-        self.quick_log_entry.pack(fill=tk.X, pady=(5, 0))
-        self.quick_log_entry.bind('<Key>', self.on_popover_text_change)  # Track first keystroke
-        self.quick_log_entry.bind('<BackSpace>', self.on_popover_text_clear)
-        self.quick_log_entry.bind('<Delete>', self.on_popover_text_clear)
-        
-        # Instructions label
-        instructions_label = ttk.Label(content_frame, text="Press Enter to log, Esc to cancel", 
-                                     font=("Arial", 9), foreground="gray")
-        instructions_label.pack(pady=(5, 0))
-        
-        # Bind Enter key to log and close
-        self.quick_log_entry.bind('<Return>', lambda e: self.quick_log_and_close())
-        
-        # Bind Escape key to close without logging
-        self.hotkey_popover.bind('<Escape>', lambda e: self.close_hotkey_popover())
-        
-        # Focus the entry field and select all text
-        self.quick_log_entry.focus()
-        self.quick_log_entry.select_range(0, tk.END)
-        
-        # Additional focus handling to ensure it works reliably
-        self.hotkey_popover.after(10, self.ensure_focus)
-        
-        # Handle window close
-        self.hotkey_popover.protocol("WM_DELETE_WINDOW", self.close_hotkey_popover)
-    
     def ensure_focus(self):
         """Ensure the text entry field has focus"""
         if self.hotkey_popover and self.quick_log_entry:
@@ -2233,11 +2018,8 @@ class LoggerApp(AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveW
         if self.recording:
             self.stop_recording()
         
-        # Clean up hotkey
-        try:
-            keyboard.remove_hotkey('ctrl+alt+l')
-        except:
-            pass
+        # Clean up global hotkey
+        self.cleanup_GlobalHotkeyMixin()
         
         # Clean up system tray
         if self.system_tray:
