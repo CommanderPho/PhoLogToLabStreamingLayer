@@ -24,6 +24,7 @@ from phopylslhelper.mixins.app_helpers import SingletonInstanceMixin, AppThemeMi
 from whisper_timestamped.mixins.live_whisper_transcription import LiveWhisperTranscriptionAppMixin
 from labrecorder import LabRecorder
 from phologtolabstreaminglayer.features.global_hotkey import GlobalHotkeyMixin
+from phologtolabstreaminglayer.features.recording_indicator_icon import RecordingIndicatorIconMixin
 
 # program_lock_port = int(os.environ.get("LIVE_WHISPER_LOCK_PORT", 13372))
 
@@ -79,6 +80,9 @@ class LoggerApp(GlobalHotkeyMixin, AppThemeMixin, SystemTrayAppMixin, SingletonI
         
         # Global hotkey state
         self.init_GlobalHotkeyMixin()
+        
+        # Windows taskbar recording indicator
+        self.init_RecordingIndicatorIconMixin()
         
         # # Singleton lock socket
         # self._lock_socket = None
@@ -1200,6 +1204,9 @@ class LoggerApp(GlobalHotkeyMixin, AppThemeMixin, SystemTrayAppMixin, SingletonI
         self.recording_thread = threading.Thread(target=self.recording_worker, daemon=True)
         self.recording_thread.start()
         
+        # Start taskbar overlay flashing
+        self.start_taskbar_overlay_flash()
+        
         recording_method = "LabRecorder" if self.is_lab_recorder_available() else "Legacy"
         self.update_log_display(f"XDF Recording started ({recording_method})", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
@@ -1236,6 +1243,9 @@ class LoggerApp(GlobalHotkeyMixin, AppThemeMixin, SystemTrayAppMixin, SingletonI
             # Start recording thread
             self.recording_thread = threading.Thread(target=self.recording_worker, daemon=True)
             self.recording_thread.start()
+            
+            # Start taskbar overlay flashing
+            self.start_taskbar_overlay_flash()
             
             self.update_log_display("XDF Recording auto-started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             print(f"Auto-started recording to: {self.xdf_filename}")
@@ -1377,6 +1387,9 @@ class LoggerApp(GlobalHotkeyMixin, AppThemeMixin, SystemTrayAppMixin, SingletonI
             return
         
         self.recording = False
+
+        # Stop taskbar overlay flashing
+        self.stop_taskbar_overlay_flash()
 
         # Log the stop event via LSL before saving
         stop_message = f"RECORDING_STOPPED: {os.path.basename(self.xdf_filename)}"
@@ -2030,6 +2043,9 @@ class LoggerApp(GlobalHotkeyMixin, AppThemeMixin, SystemTrayAppMixin, SingletonI
         
         # Clean up lab-recorder
         self.cleanup_lab_recorder()
+        
+        # Stop taskbar overlay flashing
+        self.stop_taskbar_overlay_flash()
         
         # Clean up LSL resources
 

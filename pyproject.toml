@@ -19,6 +19,7 @@ dependencies = [
     "pylsl>=1.17.6",
     "pystray>=0.19.5",
     "pytz>=2025.2",
+    "pywin32>=306; platform_system == 'Windows'",
     "pyxdf>=1.17.0",
     "setuptools>=80.9.0",
     "sounddevice>=0.5.3",
