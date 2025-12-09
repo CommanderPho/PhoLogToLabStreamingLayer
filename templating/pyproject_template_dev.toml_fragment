@@ -1,4 +1,4 @@
 [tool.uv.sources]
 whisper-timestamped = { path = "L:/repos/ExternalTesting/whisper-timestamped", editable = true }
-phopylslhelper = { path = "../LSL_REPOS/LSL/PhoPyLSLhelper", editable = true }
+phopylslhelper = { path = "../PhoPyLSLhelper", editable = true }
 
