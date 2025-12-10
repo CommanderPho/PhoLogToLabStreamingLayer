@@ -580,6 +580,8 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         except tk.TclError:
             pass  # GUI is being destroyed
     
+
+    # Application State
     def toggle_minimize(self):
         """Toggle between minimize and restore"""
         if self.is_minimized:
