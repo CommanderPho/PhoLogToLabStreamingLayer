@@ -1,25 +1,10 @@
-import platform
-import io
+import tkinter as tk
+from tkinter import ttk
+import ctypes
+from ctypes import wintypes
 import tempfile
 import os
-from typing import Optional
 from PIL import Image, ImageDraw
-
-# Windows-specific imports for taskbar overlay
-_windows_taskbar_available = False
-if platform.system() == 'Windows':
-    try:
-        import ctypes
-        from ctypes import wintypes
-        _windows_taskbar_available = True
-    except ImportError:
-        try:
-            import win32gui
-            import win32con
-            import win32com.client
-            _windows_taskbar_available = True
-        except ImportError:
-            _windows_taskbar_available = False
 
 # --- COM/Windows API Definitions ---
 from comtypes import IUnknown, GUID, COMMETHOD, HRESULT
@@ -56,8 +41,6 @@ class ITaskbarList3(IUnknown):
 CLSID_TaskbarList = GUID("{56FDF344-FD6D-11d0-958A-006097C9A090}")
 
 class TaskbarFlasher:
-    """ service class that flashes """
-
     def __init__(self, root):
         self.root = root
         self.is_flashing = False
@@ -124,76 +107,32 @@ class TaskbarFlasher:
             pass
         self.is_visible = False
 
-    def toggle(self) -> bool:
-        self.is_flashing = (not self.is_flashing)
-        if self.is_flashing:
-            self.start()
+# --- Main App ---
+def main():
+    root = tk.Tk()
+    root.title("Tkinter Recorder")
+    root.geometry("300x200")
+
+    # Initialize flasher
+    flasher = TaskbarFlasher(root)
+    
+    is_recording = False
+    
+    def toggle_record():
+        nonlocal is_recording
+        if not is_recording:
+            is_recording = True
+            btn.config(text="Stop Recording")
+            flasher.start()
         else:
-            self.stop()
+            is_recording = False
+            btn.config(text="Start Recording")
+            flasher.stop()
 
-        return self.is_flashing
+    btn = ttk.Button(root, text="Start Recording", command=toggle_record)
+    btn.pack(expand=True)
 
+    root.mainloop()
 
-class RecordingIndicatorIconMixin:
-    """
-    Mixin class to add Windows taskbar recording indicator functionality.
-    Shows a flashing red dot overlay on the taskbar button when recording is active.
-    """
-    
-    def init_RecordingIndicatorIconMixin(self):
-        """Initialize Windows taskbar overlay interface
-        requires: self.root
-
-        """
-        # Windows taskbar recording indicator
-        self.flasher = None
-        if _windows_taskbar_available:
-            self.init_windows_taskbar_overlay()
-
-
-
-    
-    def init_windows_taskbar_overlay(self):
-        """Initialize Windows taskbar overlay interface"""
-        if not _windows_taskbar_available:
-            return
-        
-        try:
-            # Initialize flasher
-            self.flasher = TaskbarFlasher(self.root)
-        except Exception as e:
-            print(f"Error initializing Windows taskbar overlay: {e}")
-            self.flasher = None
-    
-
-    def flash_taskbar_overlay(self):
-        """Toggle the taskbar overlay icon for flashing effect"""
-        if not _windows_taskbar_available or self._shutting_down:
-            return
-        
-        if not self.recording:
-            # Stop flashing if recording stopped
-            self.stop_taskbar_overlay_flash()
-            return
-        
-        # Schedule next flash (~1 second)
-        if self.recording and (not self._shutting_down):
-            self.start_taskbar_overlay_flash()
-    
-
-    def start_taskbar_overlay_flash(self):
-        """Start flashing the taskbar overlay icon"""
-        if not self.flasher:
-            return
-
-        self.flasher.start()
-
-    
-
-    def stop_taskbar_overlay_flash(self):
-        """Stop flashing the taskbar overlay icon"""
-        if self.flasher:
-            self.flasher.stop()
-
-
-
+if __name__ == "__main__":
+    main()
