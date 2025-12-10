@@ -739,16 +739,18 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         list_frame.rowconfigure(0, weight=1)
         
         # Create Treeview for stream display
-        columns = ('Name', 'Type', 'Channels', 'Rate', 'Status')
+        columns = ('Select', 'Name', 'Type', 'Channels', 'Rate', 'Status')
         self.stream_tree = ttk.Treeview(list_frame, columns=columns, show='tree headings', height=6)
         
         # Configure column headings and widths
-        self.stream_tree.heading('#0', text='Select')
-        self.stream_tree.column('#0', width=60, minwidth=60)
+        self.stream_tree.heading('#0', text='Name')
+        self.stream_tree.column('#0', width=120, minwidth=100)
         
         for col in columns:
             self.stream_tree.heading(col, text=col)
-            if col == 'Name':
+            if col == 'Select':
+                self.stream_tree.column(col, width=60, minwidth=60)
+            elif col == 'Name':
                 self.stream_tree.column(col, width=120, minwidth=100)
             elif col == 'Type':
                 self.stream_tree.column(col, width=80, minwidth=60)
@@ -1999,13 +2001,13 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         for item in self.stream_tree.get_children():
             self.stream_tree.delete(item)
         self.stream_tree_items.clear()
-        
+
         # Add current streams
         for stream_key, stream in self.discovered_streams.items():
             try:
                 # Determine selection status
                 is_selected = stream_key in self.selected_streams
-                checkbox = "☑" if is_selected else "☐"
+                checkbox_str_rep: str = "☑" if is_selected else "☐"
                 
                 # Get stream info
                 name = stream.name()
@@ -2014,16 +2016,10 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
                 rate = f"{stream.nominal_srate():.0f}Hz" if stream.nominal_srate() > 0 else "Irregular"
                 status = "Connected"
                 
-                # Insert item into tree
-                item_id = self.stream_tree.insert('', 'end', text=checkbox, 
-                                                values=(name, stream_type, channels, rate, status))
+                # Insert item into tree with name in column #0 and checkbox in Select column
+                item_id = self.stream_tree.insert('', 'end', text=name, 
+                                                values=(checkbox_str_rep, stream_type, channels, rate, status))
                 self.stream_tree_items[stream_key] = item_id
-                
-                # Color code based on selection
-                if is_selected:
-                    self.stream_tree.set(item_id, '#0', '☑')
-                else:
-                    self.stream_tree.set(item_id, '#0', '☐')
                     
             except Exception as e:
                 print(f"Error updating stream display for {stream_key}: {e}")
