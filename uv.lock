@@ -639,7 +639,7 @@ wheels = [
 
 [[package]]
 name = "lab-recorder-python"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "../lab-recorder-python" }
 dependencies = [
     { name = "numpy" },
@@ -1151,11 +1151,11 @@ wheels = [
 
 [[package]]
 name = "phologtolabstreaminglayer"
-version = "0.3.3"
+version = "0.3.5"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
-    { name = "comtypes" },
+    { name = "comtypes", marker = "sys_platform == 'win32'" },
     { name = "cython" },
     { name = "dtw-python" },
     { name = "keyboard" },
@@ -1190,7 +1190,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=25.3.0" },
-    { name = "comtypes", specifier = ">=1.4.13" },
+    { name = "comtypes", marker = "sys_platform == 'win32'", specifier = ">=1.4.13" },
     { name = "cython", specifier = ">=3.1.4" },
     { name = "dtw-python", git = "https://github.com/DynamicTimeWarping/dtw-python.git" },
     { name = "keyboard", specifier = ">=0.13.5" },

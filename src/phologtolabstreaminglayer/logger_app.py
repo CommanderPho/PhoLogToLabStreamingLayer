@@ -1775,6 +1775,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
             print(f"Error initializing LabRecorder: {e}")
             return False
     
+
     def cleanup_lab_recorder(self):
         """Clean up lab-recorder resources"""
         try:
@@ -1787,10 +1788,12 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         except Exception as e:
             print(f"Error cleaning up LabRecorder: {e}")
     
+
     def is_lab_recorder_available(self) -> bool:
         """Check if lab-recorder is available and initialized"""
         return self.lab_recorder is not None
     
+
     def start_stream_discovery(self):
         """Start continuous stream discovery in background thread"""
         if self.stream_discovery_active:
@@ -1801,6 +1804,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         self.stream_monitor_thread.start()
         print("Stream discovery started")
     
+
     def stop_stream_discovery(self):
         """Stop stream discovery"""
         self.stream_discovery_active = False
@@ -1808,6 +1812,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
             self.stream_monitor_thread.join(timeout=2.0)
         print("Stream discovery stopped")
     
+
     def stream_discovery_worker(self):
         """Background worker for continuous stream discovery with robust error handling"""
         consecutive_errors = 0
@@ -1874,6 +1879,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
                 wait_time = min(30.0, 2.0 ** consecutive_errors)
                 time.sleep(wait_time)
     
+
     def update_stream_display(self):
         """Update the GUI stream display"""
         # Update the tree view display
@@ -1886,10 +1892,12 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
             for stream_key, stream in self.discovered_streams.items():
                 print(f"  - {stream.name()} ({stream.type()}) - {stream.channel_count()} channels @ {stream.nominal_srate()}Hz")
     
+
     def get_discovered_streams(self) -> Dict[str, pylsl.StreamInfo]:
         """Get currently discovered streams"""
         return self.discovered_streams.copy()
     
+
     def select_stream(self, stream_key: str, selected: bool = True):
         """Select or deselect a stream for recording"""
         if selected:
@@ -1898,6 +1906,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
             self.selected_streams.discard(stream_key)
         print(f"Stream {stream_key} {'selected' if selected else 'deselected'}")
     
+
     def get_selected_streams(self) -> List[pylsl.StreamInfo]:
         """Get list of selected stream info objects"""
         selected = []
@@ -1906,6 +1915,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
                 selected.append(self.discovered_streams[stream_key])
         return selected
     
+
     def auto_select_own_streams(self):
         """Automatically select the application's own streams"""
         for stream_key, stream in self.discovered_streams.items():
@@ -1914,6 +1924,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
                 self.select_stream(stream_key, True)
         self.update_stream_tree_display()
     
+
     def on_stream_tree_click(self, event):
         """Handle clicks on the stream tree"""
         item = self.stream_tree.identify('item', event.x, event.y)
@@ -1931,6 +1942,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
                 self.select_stream(stream_key, not currently_selected)
                 self.update_stream_tree_display()
     
+
     def refresh_streams(self):
         """Manually refresh stream discovery with error handling"""
         try:
@@ -1967,17 +1979,20 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
             if hasattr(self, 'stream_info_label'):
                 self.stream_info_label.config(text="Stream refresh failed")
     
+
     def select_all_streams(self):
         """Select all discovered streams"""
         for stream_key in self.discovered_streams.keys():
             self.select_stream(stream_key, True)
         self.update_stream_tree_display()
     
+
     def select_no_streams(self):
         """Deselect all streams"""
         self.selected_streams.clear()
         self.update_stream_tree_display()
     
+
     def update_stream_tree_display(self):
         """Update the stream tree display with current streams"""
         # Clear existing items
@@ -2018,6 +2033,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         selected_count = len(self.selected_streams)
         self.stream_info_label.config(text=f"Streams: {total_streams} discovered, {selected_count} selected")
     
+
     def on_closing(self):
         """Handle window closing"""
         # Set shutdown flag to prevent GUI updates

@@ -40,6 +40,8 @@ class ITaskbarList3(IUnknown):
 
 CLSID_TaskbarList = GUID("{56FDF344-FD6D-11d0-958A-006097C9A090}")
 
+
+
 class TaskbarFlasher:
     def __init__(self, root):
         self.root = root

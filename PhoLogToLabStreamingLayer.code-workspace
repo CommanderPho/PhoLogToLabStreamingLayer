@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../PhoPyLSLhelper"
+		},
+		{
+			"path": "../lab-recorder-python"
 		}
 	],
 	"settings": {
