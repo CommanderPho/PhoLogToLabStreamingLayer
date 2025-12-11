@@ -41,6 +41,7 @@ def main() -> None:
         "--collect-all=sounddevice",
         "--collect-all=soundfile",
         "--collect-all=phopylslhelper",
+        "--collect-all=labrecorder",
         f"--distpath={repo_root}/dist",
         f"--workpath={repo_root}/build",
         f"--specpath={repo_root}",

@@ -36,7 +36,8 @@ for pkg in [
     'mne_lsl',
     'sounddevice',
     'soundfile',
-    'phopylslhelper',
+    'phopylslhelper',   
+    'labrecorder',
 ]:
     if has_module(pkg):
         args.append(f'--collect-all={pkg}')
