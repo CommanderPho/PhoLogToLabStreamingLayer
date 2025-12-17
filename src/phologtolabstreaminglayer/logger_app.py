@@ -229,6 +229,14 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
                     print(f'WARN: removed stream named "{a_stream_name}" from self.inlets.')
 
         ## END for a_stream_name in stream_names...
+        # Update LSL status label when inlets are successfully set up
+        if were_any_success and self.inlets:
+            connected_streams = ', '.join(self.inlets.keys())
+            try:
+                if not self._shutting_down:
+                    self.root.after(0, lambda streams=connected_streams: self.lsl_status_label.config(text=f"LSL Status: Ready - {streams}", foreground="green"))
+            except tk.TclError:
+                pass  # GUI is being destroyed
         # Note: Auto-start recording is now triggered after streams are discovered
         # (see stream_discovery_worker for when new streams are found)
 
@@ -253,22 +261,22 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
                 a_setup_fn() ## just setup
                 were_any_success = True
             
-                # # Update LSL status label safely
-                # try:
-                #     if not self._shutting_down:
-                #         self.lsl_status_label.config(text=f"LSL Status: Connected - {a_stream_name}", foreground="green")
-                # except tk.TclError:
-                #     pass  # GUI is being destroyed
+                # Update LSL status label safely
+                try:
+                    if not self._shutting_down:
+                        self.root.after(0, lambda name=a_stream_name: self.lsl_status_label.config(text=f"LSL Status: Connected - {name}", foreground="green"))
+                except tk.TclError:
+                    pass  # GUI is being destroyed
                 print(f'\tfinished: "{a_stream_name}" setup.')
                 
             except Exception as e:
                 print(f'\terror in "{a_stream_name}" setup: {e}')
+                try:
+                    if not self._shutting_down:
+                        self.root.after(0, lambda name=a_stream_name, err=str(e): self.lsl_status_label.config(text=f"LSL Status: Error - {name} - {err}", foreground="red"))
+                except tk.TclError:
+                    pass  # GUI is being destroyed
                 raise
-                # try:
-                #     if not self._shutting_down:
-                #         self.lsl_status_label.config(text=f"LSL Status: Error - {a_stream_name} - {str(e)}", foreground="red")
-                # except tk.TclError:
-                #     pass  # GUI is being destroyed
 
         ## END for a_stream_name, a_setup_fn in stream_setup_fn_dict...
         print(f'done.')
