@@ -599,9 +599,10 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
     # Resume _____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
     def setup_gui(self):
         """Create the GUI elements"""
-        # Configure root grid
+        # Configure root grid - two rows: notebook (top) and log display (bottom)
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)  # Notebook row
+        self.root.rowconfigure(1, weight=1)  # Log display row
 
         # Create tabbed notebook
         self.notebook = ttk.Notebook(self.root)
@@ -683,28 +684,15 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         self.log_button = ttk.Button(input_frame, text="Log", command=self.log_message)
         self.log_button.grid(row=0, column=2)
 
-        # Log display area
-        ttk.Label(manual_tab, text="Log History:").grid(row=next_row, column=0, sticky=(tk.W, tk.N), pady=(10, 5))
-        next_row = next_row + 1
-
-        # Scrolled text widget for log history
-        self.log_display = scrolledtext.ScrolledText(manual_tab, height=15, width=70)
-        self.log_display.grid(row=next_row, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
-        manual_tab.rowconfigure(next_row, weight=1)
-        next_row = next_row + 1
-
-        # Bottom frame for buttons and info
+        # Bottom frame for status info
         bottom_frame = ttk.Frame(manual_tab)
         bottom_frame.grid(row=next_row, column=0, sticky=(tk.W, tk.E))
         next_row = next_row + 1
-        bottom_frame.columnconfigure(1, weight=1)
-
-        # Clear log button
-        ttk.Button(bottom_frame, text="Clear Log Display", command=self.clear_log_display).grid(row=0, column=0, sticky=tk.W)
+        bottom_frame.columnconfigure(0, weight=1)
 
         # Status info
         self.status_info_label = ttk.Label(bottom_frame, text="Ready")
-        self.status_info_label.grid(row=0, column=2, sticky=tk.E)
+        self.status_info_label.grid(row=0, column=0, sticky=tk.E)
 
         # Focus on text entry
         self.text_entry.focus()
@@ -726,6 +714,28 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
 
         # Default to Recording tab
         self.notebook.select(0)
+
+        # ------------------------- Top-Level Log Display Area -------------------------
+        # Create frame for log display at root level (bottom half of window)
+        log_display_frame = ttk.Frame(self.root, padding="10")
+        log_display_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        log_display_frame.columnconfigure(0, weight=1)
+        log_display_frame.rowconfigure(1, weight=1)  # ScrolledText row
+
+        # Log History label
+        ttk.Label(log_display_frame, text="Log History:").grid(row=0, column=0, sticky=(tk.W, tk.N), pady=(0, 5))
+
+        # Scrolled text widget for log history
+        self.log_display = scrolledtext.ScrolledText(log_display_frame, height=15, width=70)
+        self.log_display.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+        # Bottom frame for clear button
+        log_bottom_frame = ttk.Frame(log_display_frame)
+        log_bottom_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+        log_bottom_frame.columnconfigure(0, weight=1)
+
+        # Clear log button
+        ttk.Button(log_bottom_frame, text="Clear Log Display", command=self.clear_log_display).grid(row=0, column=0, sticky=tk.W)
     
     def setup_stream_monitor_gui(self, parent, row: int = 2):
         """Setup Stream Monitor GUI for displaying discovered LSL streams"""
