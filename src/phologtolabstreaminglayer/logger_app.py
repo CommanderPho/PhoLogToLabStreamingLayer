@@ -105,6 +105,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         self.lab_recorder: Optional[LabRecorder] = None
         self.discovered_streams: Dict[str, pylsl.StreamInfo] = {}
         self.selected_streams: set = set()
+        self._stream_discovery_lock = threading.Lock()  # Lock for thread-safe access to discovered_streams and selected_streams
         self.stream_monitor_thread: Optional[threading.Thread] = None
         self.stream_discovery_active = False
         self.auto_start_attempted = False  # Track if we've tried to auto-start recording
@@ -156,6 +157,8 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
     @property
     def has_any_inlets(self) -> bool:
         """The has_any_inlets property."""
+        if self._shutting_down:
+            return False
         return (self.inlets is not None) and (len(self.inlets) > 0)
 
 
@@ -1390,7 +1393,11 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         """Legacy background thread for recording LSL data with incremental backup"""
         sample_count = 0
         
-        while self.recording and self.has_any_inlets:
+        while self.recording and self.has_any_inlets and not self._shutting_down:
+            # Check shutdown and inlets before accessing
+            if self._shutting_down or self.inlets is None:
+                break
+            
             ## loop through streams
             should_save_backup: bool = False
             for a_stream_name, an_inlet in self.inlets.items():
@@ -1874,30 +1881,35 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
                         continue
                 
                 # Check for changes and notify of disconnections
-                if new_discovered != self.discovered_streams:
-                    # Detect disconnected streams
-                    disconnected_streams = set(self.discovered_streams.keys()) - set(new_discovered.keys())
-                    if disconnected_streams:
-                        print(f"Streams disconnected: {disconnected_streams}")
-                        # Remove disconnected streams from selection
-                        for stream_key in disconnected_streams:
-                            self.selected_streams.discard(stream_key)
-                    
-                    # Detect new streams
-                    new_streams = set(new_discovered.keys()) - set(self.discovered_streams.keys())
-                    if new_streams:
-                        print(f"New streams discovered: {new_streams}")
-                    
-                    self.discovered_streams = new_discovered
-                    # Schedule GUI update on main thread
-                    if not self._shutting_down:
-                        self.root.after(0, self.update_stream_display)
+                # Use lock to safely compare and update discovered_streams
+                new_streams = set()
+                with self._stream_discovery_lock:
+                    if self._shutting_down:
+                        break
+                    if new_discovered != self.discovered_streams:
+                        # Detect disconnected streams
+                        disconnected_streams = set(self.discovered_streams.keys()) - set(new_discovered.keys())
+                        if disconnected_streams:
+                            print(f"Streams disconnected: {disconnected_streams}")
+                            # Remove disconnected streams from selection
+                            for stream_key in disconnected_streams:
+                                self.selected_streams.discard(stream_key)
+                        
+                        # Detect new streams
+                        new_streams = set(new_discovered.keys()) - set(self.discovered_streams.keys())
+                        if new_streams:
+                            print(f"New streams discovered: {new_streams}")
+                        
+                        self.discovered_streams = new_discovered
+                
+                # Schedule GUI update on main thread (outside lock to avoid blocking)
+                if not self._shutting_down:
+                    self.root.after(0, self.update_stream_display)
                     
                     # Try to auto-start recording if we haven't already and streams are available
                     if not self.auto_start_attempted and new_streams:
                         # Auto-select own streams and try to start recording
-                        if not self._shutting_down:
-                            self.root.after(500, self._try_auto_start_after_stream_discovery)
+                        self.root.after(500, self._try_auto_start_after_stream_discovery)
                 
                 # Wait before next discovery cycle
                 time.sleep(2.0)
@@ -1925,46 +1937,58 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
 
     def update_stream_display(self):
         """Update the GUI stream display"""
+        if self._shutting_down:
+            return
+        
         # Update the tree view display
         if hasattr(self, 'stream_tree'):
             self.update_stream_tree_display()
         
         # Also print to console for debugging
-        if self.discovered_streams:
-            print(f"Discovered {len(self.discovered_streams)} streams:")
-            for stream_key, stream in self.discovered_streams.items():
-                print(f"  - {stream.name()} ({stream.type()}) - {stream.channel_count()} channels @ {stream.nominal_srate()}Hz")
+        with self._stream_discovery_lock:
+            if self.discovered_streams:
+                print(f"Discovered {len(self.discovered_streams)} streams:")
+                for stream_key, stream in self.discovered_streams.items():
+                    print(f"  - {stream.name()} ({stream.type()}) - {stream.channel_count()} channels @ {stream.nominal_srate()}Hz")
     
 
     def get_discovered_streams(self) -> Dict[str, pylsl.StreamInfo]:
         """Get currently discovered streams"""
-        return self.discovered_streams.copy()
+        with self._stream_discovery_lock:
+            return self.discovered_streams.copy()
     
 
     def select_stream(self, stream_key: str, selected: bool = True):
         """Select or deselect a stream for recording"""
-        if selected:
-            self.selected_streams.add(stream_key)
-        else:
-            self.selected_streams.discard(stream_key)
+        with self._stream_discovery_lock:
+            if selected:
+                self.selected_streams.add(stream_key)
+            else:
+                self.selected_streams.discard(stream_key)
         print(f"Stream {stream_key} {'selected' if selected else 'deselected'}")
     
 
     def get_selected_streams(self) -> List[pylsl.StreamInfo]:
         """Get list of selected stream info objects"""
         selected = []
-        for stream_key in self.selected_streams:
-            if stream_key in self.discovered_streams:
-                selected.append(self.discovered_streams[stream_key])
+        with self._stream_discovery_lock:
+            for stream_key in self.selected_streams:
+                try:
+                    if stream_key in self.discovered_streams:
+                        selected.append(self.discovered_streams[stream_key])
+                except KeyError:
+                    # Stream was removed between iteration and access, skip it
+                    continue
         return selected
     
 
     def auto_select_own_streams(self):
         """Automatically select the application's own streams"""
-        for stream_key, stream in self.discovered_streams.items():
-            stream_name = stream.name()
-            if stream_name in self.stream_names:  # TextLogger, EventBoard, WhisperLiveLogger
-                self.select_stream(stream_key, True)
+        with self._stream_discovery_lock:
+            for stream_key, stream in self.discovered_streams.items():
+                stream_name = stream.name()
+                if stream_name in self.stream_names:  # TextLogger, EventBoard, WhisperLiveLogger
+                    self.selected_streams.add(stream_key)
         self.update_stream_tree_display()
     
 
@@ -2006,7 +2030,8 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
                     print(f"Error processing stream during refresh: {e}")
                     continue
             
-            self.discovered_streams = new_discovered
+            with self._stream_discovery_lock:
+                self.discovered_streams = new_discovered
             self.update_stream_tree_display()
             
             # Update status
@@ -2025,29 +2050,40 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
 
     def select_all_streams(self):
         """Select all discovered streams"""
-        for stream_key in self.discovered_streams.keys():
-            self.select_stream(stream_key, True)
+        with self._stream_discovery_lock:
+            for stream_key in self.discovered_streams.keys():
+                self.selected_streams.add(stream_key)
         self.update_stream_tree_display()
     
 
     def select_no_streams(self):
         """Deselect all streams"""
-        self.selected_streams.clear()
+        with self._stream_discovery_lock:
+            self.selected_streams.clear()
         self.update_stream_tree_display()
     
 
     def update_stream_tree_display(self):
         """Update the stream tree display with current streams"""
+        if self._shutting_down:
+            return
+        
         # Clear existing items
         for item in self.stream_tree.get_children():
             self.stream_tree.delete(item)
         self.stream_tree_items.clear()
 
-        # Add current streams
-        for stream_key, stream in self.discovered_streams.items():
+        # Add current streams (copy data while holding lock, then process outside lock)
+        streams_snapshot = {}
+        selected_snapshot = set()
+        with self._stream_discovery_lock:
+            streams_snapshot = self.discovered_streams.copy()
+            selected_snapshot = self.selected_streams.copy()
+        
+        for stream_key, stream in streams_snapshot.items():
             try:
                 # Determine selection status
-                is_selected = stream_key in self.selected_streams
+                is_selected = stream_key in selected_snapshot
                 checkbox_str_rep: str = "☑" if is_selected else "☐"
                 
                 # Get stream info
@@ -2065,9 +2101,9 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
             except Exception as e:
                 print(f"Error updating stream display for {stream_key}: {e}")
         
-        # Update info label
-        total_streams = len(self.discovered_streams)
-        selected_count = len(self.selected_streams)
+        # Update info label (use snapshot data)
+        total_streams = len(streams_snapshot)
+        selected_count = len(selected_snapshot)
         self.stream_info_label.config(text=f"Streams: {total_streams} discovered, {selected_count} selected")
     
 
@@ -2084,6 +2120,18 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         if self.recording:
             self.stop_recording()
         
+        # Stop stream discovery
+        self.stop_stream_discovery()
+        
+        # Wait for threads to fully stop before cleaning up resources
+        # Check if recording thread is still alive after stop_recording
+        if hasattr(self, 'recording_thread') and self.recording_thread and self.recording_thread.is_alive():
+            print("Warning: Recording thread did not stop cleanly within timeout")
+        
+        # Check if stream discovery thread is still alive after stop_stream_discovery
+        if hasattr(self, 'stream_monitor_thread') and self.stream_monitor_thread and self.stream_monitor_thread.is_alive():
+            print("Warning: Stream discovery thread did not stop cleanly within timeout")
+        
         # Clean up global hotkey
         self.cleanup_GlobalHotkeyMixin()
         
@@ -2091,17 +2139,13 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         if self.system_tray:
             self.system_tray.stop()
         
-        # Stop stream discovery
-        self.stop_stream_discovery()
-        
         # Clean up lab-recorder
         self.cleanup_lab_recorder()
         
         # Stop taskbar overlay flashing
         self.stop_taskbar_overlay_flash()
         
-        # Clean up LSL resources
-
+        # Clean up LSL resources (only after threads have stopped or been confirmed stopped)
         if hasattr(self, 'outlets') and self.outlets:
             # for an_outlet_name, an_outlet in self.outlets:
             outlet_names: List[str] = list(self.outlets.keys())
@@ -2110,7 +2154,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
             self.outlets = None
             del self.outlets
 
-        if hasattr(self, 'inlets') and self.inlets:
+        if hasattr(self, 'inlets') and self.inlets is not None:
             a_names: List[str] = list(self.inlets.keys())
             for a_name in a_names:
                 self.inlets.pop(a_name)
