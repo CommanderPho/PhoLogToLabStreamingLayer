@@ -1287,13 +1287,10 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
             # Start taskbar overlay flashing
             self.start_taskbar_overlay_flash()
             
-            self.update_log_display("XDF Recording auto-started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            print(f"Auto-started recording to: {self.xdf_filename}")
-            
             # Log the auto-start event both in GUI and via LSL
+            self.update_log_display("XDF Recording auto-started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             auto_start_message = f"RECORDING_AUTO_STARTED: {new_filename}"
             self.send_lsl_message(auto_start_message)  # Send via LSL
-            self.update_log_display("XDF Recording auto-started", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             print(f"Auto-started recording to: {self.xdf_filename}")
 
         except Exception as e:
