@@ -1953,11 +1953,12 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
             self.update_stream_tree_display()
         
         # Also print to console for debugging
-        with self._stream_discovery_lock:
-            if self.discovered_streams:
-                print(f"Discovered {len(self.discovered_streams)} streams:")
-                for stream_key, stream in self.discovered_streams.items():
-                    print(f"  - {stream.name()} ({stream.type()}) - {stream.channel_count()} channels @ {stream.nominal_srate()}Hz")
+        # Removed repeated "Discovered X streams" console logs
+        # with self._stream_discovery_lock:
+        #     if self.discovered_streams:
+        #         print(f"Discovered {len(self.discovered_streams)} streams:")
+        #         for stream_key, stream in self.discovered_streams.items():
+        #             print(f"  - {stream.name()} ({stream.type()}) - {stream.channel_count()} channels @ {stream.nominal_srate()}Hz")
     
 
     def get_discovered_streams(self) -> Dict[str, pylsl.StreamInfo]:
