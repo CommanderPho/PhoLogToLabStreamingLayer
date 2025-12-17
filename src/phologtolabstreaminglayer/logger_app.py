@@ -107,6 +107,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         self.selected_streams: set = set()
         self.stream_monitor_thread: Optional[threading.Thread] = None
         self.stream_discovery_active = False
+        self.auto_start_attempted = False  # Track if we've tried to auto-start recording
         
         self.capture_stream_start_timestamps() ## `EasyTimeSyncParsingMixin`: capture timestamps for use in LSL streams
         self.capture_recording_start_timestamps() ## capture timestamps for use in LSL streams
@@ -120,8 +121,8 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         # Check for recovery files
         self.check_for_recovery()
         
-        # Then create LSL outlets
-        self.setup_lsl_outlet()
+        # Create LSL outlets in background thread to avoid blocking GUI
+        threading.Thread(target=self.setup_lsl_outlet, daemon=True).start()
 
         ## setup transcirption
         self.root.after(200, self.auto_start_live_transcription)
@@ -225,9 +226,8 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
                     print(f'WARN: removed stream named "{a_stream_name}" from self.inlets.')
 
         ## END for a_stream_name in stream_names...
-        if were_any_success:
-            # Auto-start recording after inlet is ready
-            self.root.after(500, self.auto_start_recording)
+        # Note: Auto-start recording is now triggered after streams are discovered
+        # (see stream_discovery_worker for when new streams are found)
 
 
     def setup_lsl_outlet(self):
@@ -272,7 +272,11 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
 
         if were_any_success:
             # Setup inlet for recording our own stream (with delay to allow outlet to be discovered)
-            self.root.after(1000, self.setup_recording_inlet)
+            # Run in background thread to avoid blocking GUI, but schedule GUI updates on main thread
+            def delayed_setup_inlet():
+                time.sleep(1.0)  # Wait for outlets to be discoverable
+                self.setup_recording_inlet()
+            threading.Thread(target=delayed_setup_inlet, daemon=True).start()
    
 
     def setup_TextLogger_outlet(self):
@@ -1225,11 +1229,33 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         self.update_log_display(f"XDF Recording started ({recording_method})", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 
+    def _try_auto_start_after_stream_discovery(self):
+        """Try to auto-start recording after streams are discovered (called from stream discovery)"""
+        if self.auto_start_attempted:
+            return  # Already tried
+        
+        self.auto_start_attempted = True
+        
+        # Auto-select own streams for recording
+        if self.is_lab_recorder_available():
+            self.auto_select_own_streams()
+            selected_streams = self.get_selected_streams()
+            if selected_streams:
+                # Streams are available and selected, try to start
+                self.auto_start_recording()
+            else:
+                print("Cannot auto-start recording: no own streams found to select")
+        elif self.has_any_inlets:
+            # Legacy mode with inlets
+            self.auto_start_recording()
+        else:
+            print("Cannot auto-start recording: no streams or inlets available")
+
     def auto_start_recording(self):
         """Automatically start recording on app launch if streams are available"""
         # Check if we have streams to record
         if self.is_lab_recorder_available():
-            # Auto-select own streams for recording
+            # Auto-select own streams for recording (in case not already selected)
             self.auto_select_own_streams()
             selected_streams = self.get_selected_streams()
             if not selected_streams:
@@ -1869,6 +1895,12 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
                     # Schedule GUI update on main thread
                     if not self._shutting_down:
                         self.root.after(0, self.update_stream_display)
+                    
+                    # Try to auto-start recording if we haven't already and streams are available
+                    if not self.auto_start_attempted and new_streams:
+                        # Auto-select own streams and try to start recording
+                        if not self._shutting_down:
+                            self.root.after(500, self._try_auto_start_after_stream_discovery)
                 
                 # Wait before next discovery cycle
                 time.sleep(2.0)
