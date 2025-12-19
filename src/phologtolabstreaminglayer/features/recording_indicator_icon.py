@@ -7,58 +7,69 @@ from PIL import Image, ImageDraw
 
 # Windows-specific imports for taskbar overlay
 _windows_taskbar_available = False
+ctypes = None
+wintypes = None
+win32gui = None
+win32con = None
+IUnknown = None
+GUID = None
+COMMETHOD = None
+HRESULT = None
+CreateObject = None
+ITaskbarList3 = None
+CLSID_TaskbarList = None
+
 if platform.system() == 'Windows':
     try:
         import ctypes
         from ctypes import wintypes
-        _windows_taskbar_available = True
-    except ImportError:
         try:
+            # --- COM/Windows API Definitions ---
+            from comtypes import IUnknown, GUID, COMMETHOD, HRESULT
+            from comtypes.client import CreateObject
             import win32gui
             import win32con
-            import win32com.client
+            
+            # 1. Define the ITaskbarList3 Interface
+            # This tells comtypes exactly which methods exist and in what order (VTable).
+            class ITaskbarList3(IUnknown):
+                _iid_ = GUID("{EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF}")
+                _methods_ = [
+                    # ITaskbarList methods
+                    COMMETHOD([], HRESULT, 'HrInit'),
+                    COMMETHOD([], HRESULT, 'AddTab', (['in'], wintypes.HWND, 'hwnd')),
+                    COMMETHOD([], HRESULT, 'DeleteTab', (['in'], wintypes.HWND, 'hwnd')),
+                    COMMETHOD([], HRESULT, 'ActivateTab', (['in'], wintypes.HWND, 'hwnd')),
+                    COMMETHOD([], HRESULT, 'SetActiveAlt', (['in'], wintypes.HWND, 'hwnd')),
+                    # ITaskbarList2 methods
+                    COMMETHOD([], HRESULT, 'MarkFullscreenWindow', (['in'], wintypes.HWND, 'hwnd'), (['in'], wintypes.BOOL, 'fFullscreen')),
+                    # ITaskbarList3 methods
+                    COMMETHOD([], HRESULT, 'SetProgressValue', (['in'], wintypes.HWND, 'hwnd'), (['in'], ctypes.c_uint64, 'ullCompleted'), (['in'], ctypes.c_uint64, 'ullTotal')),
+                    COMMETHOD([], HRESULT, 'SetProgressState', (['in'], wintypes.HWND, 'hwnd'), (['in'], ctypes.c_int, 'tbpFlags')),
+                    COMMETHOD([], HRESULT, 'RegisterTab', (['in'], wintypes.HWND, 'hwndTab'), (['in'], wintypes.HWND, 'hwndMDI')),
+                    COMMETHOD([], HRESULT, 'UnregisterTab', (['in'], wintypes.HWND, 'hwndTab')),
+                    COMMETHOD([], HRESULT, 'SetTabOrder', (['in'], wintypes.HWND, 'hwndTab'), (['in'], wintypes.HWND, 'hwndInsertBefore')),
+                    COMMETHOD([], HRESULT, 'SetTabActive', (['in'], wintypes.HWND, 'hwndTab'), (['in'], wintypes.HWND, 'hwndMDI'), (['in'], ctypes.c_uint, 'dwReserved')),
+                    COMMETHOD([], HRESULT, 'ThumbBarAddButtons', (['in'], wintypes.HWND, 'hwnd'), (['in'], ctypes.c_uint, 'cButtons'), (['in'], ctypes.c_void_p, 'pButton')),
+                    COMMETHOD([], HRESULT, 'ThumbBarUpdateButtons', (['in'], wintypes.HWND, 'hwnd'), (['in'], ctypes.c_uint, 'cButtons'), (['in'], ctypes.c_void_p, 'pButton')),
+                    COMMETHOD([], HRESULT, 'ThumbBarSetImageList', (['in'], wintypes.HWND, 'hwnd'), (['in'], ctypes.c_void_p, 'himl')),
+                    COMMETHOD([], HRESULT, 'SetOverlayIcon', (['in'], wintypes.HWND, 'hwnd'), (['in'], wintypes.HICON, 'hIcon'), (['in'], wintypes.LPCWSTR, 'pszDescription')),
+                ]
+            
+            CLSID_TaskbarList = GUID("{56FDF344-FD6D-11d0-958A-006097C9A090}")
             _windows_taskbar_available = True
         except ImportError:
             _windows_taskbar_available = False
-
-# --- COM/Windows API Definitions ---
-from comtypes import IUnknown, GUID, COMMETHOD, HRESULT
-from comtypes.client import CreateObject
-import win32gui
-import win32con
-
-# 1. Define the ITaskbarList3 Interface
-# This tells comtypes exactly which methods exist and in what order (VTable).
-class ITaskbarList3(IUnknown):
-    _iid_ = GUID("{EA1AFB91-9E28-4B86-90E9-9E9F8A5EEFAF}")
-    _methods_ = [
-        # ITaskbarList methods
-        COMMETHOD([], HRESULT, 'HrInit'),
-        COMMETHOD([], HRESULT, 'AddTab', (['in'], wintypes.HWND, 'hwnd')),
-        COMMETHOD([], HRESULT, 'DeleteTab', (['in'], wintypes.HWND, 'hwnd')),
-        COMMETHOD([], HRESULT, 'ActivateTab', (['in'], wintypes.HWND, 'hwnd')),
-        COMMETHOD([], HRESULT, 'SetActiveAlt', (['in'], wintypes.HWND, 'hwnd')),
-        # ITaskbarList2 methods
-        COMMETHOD([], HRESULT, 'MarkFullscreenWindow', (['in'], wintypes.HWND, 'hwnd'), (['in'], wintypes.BOOL, 'fFullscreen')),
-        # ITaskbarList3 methods
-        COMMETHOD([], HRESULT, 'SetProgressValue', (['in'], wintypes.HWND, 'hwnd'), (['in'], ctypes.c_uint64, 'ullCompleted'), (['in'], ctypes.c_uint64, 'ullTotal')),
-        COMMETHOD([], HRESULT, 'SetProgressState', (['in'], wintypes.HWND, 'hwnd'), (['in'], ctypes.c_int, 'tbpFlags')),
-        COMMETHOD([], HRESULT, 'RegisterTab', (['in'], wintypes.HWND, 'hwndTab'), (['in'], wintypes.HWND, 'hwndMDI')),
-        COMMETHOD([], HRESULT, 'UnregisterTab', (['in'], wintypes.HWND, 'hwndTab')),
-        COMMETHOD([], HRESULT, 'SetTabOrder', (['in'], wintypes.HWND, 'hwndTab'), (['in'], wintypes.HWND, 'hwndInsertBefore')),
-        COMMETHOD([], HRESULT, 'SetTabActive', (['in'], wintypes.HWND, 'hwndTab'), (['in'], wintypes.HWND, 'hwndMDI'), (['in'], ctypes.c_uint, 'dwReserved')),
-        COMMETHOD([], HRESULT, 'ThumbBarAddButtons', (['in'], wintypes.HWND, 'hwnd'), (['in'], ctypes.c_uint, 'cButtons'), (['in'], ctypes.c_void_p, 'pButton')),
-        COMMETHOD([], HRESULT, 'ThumbBarUpdateButtons', (['in'], wintypes.HWND, 'hwnd'), (['in'], ctypes.c_uint, 'cButtons'), (['in'], ctypes.c_void_p, 'pButton')),
-        COMMETHOD([], HRESULT, 'ThumbBarSetImageList', (['in'], wintypes.HWND, 'hwnd'), (['in'], ctypes.c_void_p, 'himl')),
-        COMMETHOD([], HRESULT, 'SetOverlayIcon', (['in'], wintypes.HWND, 'hwnd'), (['in'], wintypes.HICON, 'hIcon'), (['in'], wintypes.LPCWSTR, 'pszDescription')),
-    ]
-
-CLSID_TaskbarList = GUID("{56FDF344-FD6D-11d0-958A-006097C9A090}")
+    except ImportError:
+        _windows_taskbar_available = False
 
 class TaskbarFlasher:
     """ service class that flashes """
 
     def __init__(self, root):
+        if not _windows_taskbar_available or ctypes is None or win32gui is None or win32con is None or CreateObject is None or ITaskbarList3 is None or CLSID_TaskbarList is None:
+            raise RuntimeError("Windows taskbar features are not available on this platform")
+        
         self.root = root
         self.is_flashing = False
         self.is_visible = False
