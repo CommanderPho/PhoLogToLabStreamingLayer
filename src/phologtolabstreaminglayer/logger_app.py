@@ -1267,7 +1267,7 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         # Check if we have streams to record
         if self.is_lab_recorder_available():
             # Auto-select own streams for recording (in case not already selected)
-            self.auto_select_own_streams()
+            self.select_all_streams()
             selected_streams = self.get_selected_streams()
             if not selected_streams:
                 print("Cannot auto-start recording: no streams selected")
