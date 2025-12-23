@@ -1,0 +1,65 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name: Python package
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Setup uv
+      uses: andgineer/uv-venv@v3
+      
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        uv install --all-extras
+        # uv pip install -r requirements.dev.txt
+        # if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        
+    - name: Versatile PyInstaller
+        uses: sayyid5416/pyinstaller@v1.8.0
+        with:
+          spec: "PhoLogToLabStreamingLayer.spec" # default is 
+          # path of your requirements.txt file
+        #   requirements: # optional, default is 
+        #   # Options to set for pyinstaller command Ex: options: '--onedir, -F'       (seperated by comma and space)
+        # - Supported options: Check readme      
+        #   options: # optional, default is 
+        #   # Custom parameters for spec file. (won't work with .py spec file) Ex: spec_options: '--debug'
+        #   spec_options: # optional, default is 
+        #   # specific python version you want to use
+        #   python_ver: # optional, default is 3.10
+        #   # specific python architecture you want to use
+        #   python_arch: # optional, default is x64
+        #   # specific pyinstaller version you want to use
+        #   pyinstaller_ver: # optional, default is 
+        #   # Path on runner-os, where generated executable files are stored
+        #   exe_path: # optional, default is ./dist
+        #   # If passed, uploads executable artifact  with this name. Else, artifact won't be uploaded.
+        #   upload_exe_with_name: # optional, default is 
+        #   # If true, perform a clean checkout; if false, skip cleaning. Cleaning will remove all existing local files not in the repository during checkout. If you use utilities like pyinstaller-versionfile, set this to false.
+        #   clean_checkout: # optional, default is true
+        #   # Whether to download Git-LFS files (passed to actions/checkout)
+        #   lfs: # optional
+        #   # Level of compression for archive (between 0 and 9). 0 = No compression, 9 = Max compression.
+        #   compression_level: # optional, default is 6
+                
