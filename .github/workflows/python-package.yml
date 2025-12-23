@@ -12,41 +12,41 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [windows-latest, ubuntu-latest]
         python-version: ["3.9", "3.10"]
 
     steps:
-        - uses: actions/checkout@v4
-        - name: Set up Python ${{ matrix.python-version }}
-          uses: actions/setup-python@v3
-          with:
-            python-version: ${{ matrix.python-version }}
-            
-        - name: Setup uv
-          uses: andgineer/uv-venv@v3
-          
-        - name: Install dependencies
-          run: |
-            # uv python pin ${{ matrix.python-version }}
-            uv sync --all-extras
-            # uv pip install -r requirements.dev.txt
-            # if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-            
-        - name: Build Windows executable
-          if: runner.os == 'Windows'
-          run: python scripts/build_exe.py
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
         
-        - name: Build macOS app
-          if: runner.os == 'macOS'
-          run: python scripts/build_macOS_app.py
-        
-        - name: Upload dist artifacts
-          if: success()
-          uses: actions/upload-artifact@v4
-          with:
-            name: PhoLogToLabStreamingLayer-${{ matrix.os }}-py${{ matrix.python-version }}
-            path: dist/
-                  
+    - name: Setup uv
+      uses: andgineer/uv-venv@v3
+      
+    - name: Install dependencies
+      run: |
+        # uv python pin ${{ matrix.python-version }}
+        uv sync --all-extras
+        # uv pip install -r requirements.dev.txt
+        # if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Build Windows executable
+      if: runner.os == 'Windows'
+      run: python scripts/build_exe.py
+
+    - name: Build macOS app
+      if: runner.os == 'macOS'
+      run: python scripts/build_macOS_app.py
+
+    - name: Upload dist artifacts
+      if: success() && runner.os != 'Linux'
+      uses: actions/upload-artifact@v4
+      with:
+        name: PhoLogToLabStreamingLayer-${{ matrix.os }}-py${{ matrix.python-version }}
+        path: dist/
