@@ -1,7 +1,11 @@
 ---
+
 name: File-Based PID Locking for SingletonInstanceMixin
+
 overview: Replace socket-based singleton lock with file-based PID tracking that works cross-platform, handles permission errors gracefully, and automatically detects stale locks from crashed processes.
+
 todos: []
+
 ---
 
 # File-Based PID Locking for SingletonInstanceMixin
@@ -121,8 +125,6 @@ def _is_process_alive(self, pid: int) -> Optional[bool]:
     except OSError:
         return None  # Other OS error, uncertain
 ```
-
-
 
 ### Lock File Path Strategy
 
