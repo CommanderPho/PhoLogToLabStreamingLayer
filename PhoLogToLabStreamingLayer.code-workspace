@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../lab-recorder-python"
+		},
+		{
+			"path": "../whisper-timestamped"
 		}
 	],
 	"settings": {

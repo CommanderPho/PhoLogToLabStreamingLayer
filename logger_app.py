@@ -57,28 +57,3 @@ if __name__ == "__main__":
     # assert _default_xdf_folder.exists(), f"XDF folder does not exist: {_default_xdf_folder}"
     main(xdf_folder=_default_xdf_folder, unsafe=unsafe)
 
-
-    
-
-    # inst = SingletonInstanceMixin()
-    # inst.acquire_singleton_lock()
-    # # inst.release_singleton_lock()
-    # print("Singleton lock acquired and released")
-
-    # try:
-    #     ## Get the correct lock port
-    #     program_lock_port: int = 13372 # self.helper_SingletonInstanceMixin_get_lock_port()
-
-    #     lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #     lock_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    #     lock_socket.bind(('localhost', program_lock_port))
-
-    #     lock_socket.close()
-
-
-    #     lock_socket.listen(1)
-    #     print("Singleton lock acquired successfully")
-
-    # except OSError as e:
-    #     print(f"Failed to acquire singleton lock: {e}")
-        
