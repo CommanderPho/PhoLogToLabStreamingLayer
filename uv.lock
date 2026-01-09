@@ -642,20 +642,12 @@ wheels = [
 [[package]]
 name = "lab-recorder-python"
 version = "0.2.2"
-source = { editable = "../lab-recorder-python" }
+source = { git = "https://github.com/CommanderPho/lab-recorder-python.git#32e855d81e65f64297d274d5bf5df17921bd3365" }
 dependencies = [
     { name = "numpy" },
     { name = "pyinstaller" },
     { name = "pylsl" },
     { name = "pyxdf" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", specifier = ">=2.0.2" },
-    { name = "pyinstaller", specifier = ">=6.16.0" },
-    { name = "pylsl", specifier = ">=1.17.6" },
-    { name = "pyxdf", specifier = ">=1.17.0" },
 ]
 
 [[package]]
@@ -1195,11 +1187,11 @@ requires-dist = [
     { name = "cython", specifier = ">=3.1.4" },
     { name = "dtw-python", git = "https://github.com/DynamicTimeWarping/dtw-python.git" },
     { name = "keyboard", specifier = ">=0.13.5" },
-    { name = "lab-recorder-python", editable = "../lab-recorder-python" },
+    { name = "lab-recorder-python", git = "https://github.com/CommanderPho/lab-recorder-python.git" },
     { name = "matplotlib", specifier = ">=3.9.4" },
     { name = "mne", specifier = ">=1.8.0" },
     { name = "mne-lsl", specifier = ">=1.6.1" },
-    { name = "phopylslhelper", editable = "../PhoPyLSLhelper" },
+    { name = "phopylslhelper", git = "https://github.com/CommanderPho/phopylslhelper.git" },
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "psutil", specifier = ">=7.1.1" },
     { name = "pyinstaller", specifier = ">=6.14.2" },
@@ -1214,7 +1206,7 @@ requires-dist = [
     { name = "torch", marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
     { name = "torch", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", specifier = ">=2.7.1" },
     { name = "wheel", specifier = ">=0.45.1" },
-    { name = "whisper-timestamped", editable = "../whisper-timestamped" },
+    { name = "whisper-timestamped", git = "https://github.com/CommanderPho/whisper-timestamped.git" },
 ]
 
 [package.metadata.requires-dev]
@@ -1228,16 +1220,10 @@ dev = [
 [[package]]
 name = "phopylslhelper"
 version = "0.1.3"
-source = { editable = "../PhoPyLSLhelper" }
+source = { git = "https://github.com/CommanderPho/phopylslhelper.git#d04aa898ff0d932642e133b3d2d0857d190e0536" }
 dependencies = [
     { name = "pylsl" },
     { name = "pytz" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "pylsl", specifier = ">=1.16.2" },
-    { name = "pytz", specifier = ">=2025.2" },
 ]
 
 [[package]]
@@ -4525,8 +4511,8 @@ wheels = [
 
 [[package]]
 name = "whisper-timestamped"
-version = "0.2.2"
-source = { editable = "../whisper-timestamped" }
+version = "0.2.1"
+source = { git = "https://github.com/CommanderPho/whisper-timestamped.git#9871b7c1be00f1962d96d3465bffa4dc7139d11d" }
 dependencies = [
     { name = "attrs" },
     { name = "auditok" },
@@ -4558,55 +4544,3 @@ dependencies = [
     { name = "transformers" },
     { name = "wheel" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "attrs", specifier = ">=25.3.0" },
-    { name = "auditok", specifier = ">=0.3.0" },
-    { name = "auditok", marker = "extra == 'vad-auditok'" },
-    { name = "cython" },
-    { name = "dtw-python" },
-    { name = "faster-whisper", specifier = ">=1.2.0" },
-    { name = "faster-whisper", marker = "extra == 'full'", specifier = ">=1.0.0" },
-    { name = "faster-whisper", marker = "extra == 'live'", specifier = ">=1.0.0" },
-    { name = "huggingface-hub", extras = ["hf-xet"], specifier = ">=0.33.4" },
-    { name = "ipykernel", specifier = ">=6.30.0" },
-    { name = "jsonschema", marker = "extra == 'test'" },
-    { name = "keyboard", specifier = ">=0.13.5" },
-    { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.10.3" },
-    { name = "matplotlib", marker = "extra == 'full'", specifier = ">=3.10.3" },
-    { name = "mne", specifier = ">=1.10.0" },
-    { name = "mne-lsl", specifier = ">=1.10.1" },
-    { name = "numpy", specifier = ">=2.2.6" },
-    { name = "onnxruntime", specifier = ">=1.22.1,<1.23" },
-    { name = "onnxruntime", marker = "extra == 'full'", specifier = ">=1.22.1,<1.23" },
-    { name = "onnxruntime", marker = "extra == 'vad-silero'", specifier = ">=1.22.1,<1.23" },
-    { name = "openai-whisper", git = "https://github.com/openai/whisper.git" },
-    { name = "pandas", specifier = ">=2.3.1" },
-    { name = "phopylslhelper", editable = "../PhoPyLSLhelper" },
-    { name = "pyautogui", specifier = ">=0.9.54" },
-    { name = "pyinstaller", specifier = ">=6.15.0" },
-    { name = "pylsl", specifier = ">=1.17.6" },
-    { name = "pystray", specifier = ">=0.19.5" },
-    { name = "pyxdf", specifier = ">=1.17.0" },
-    { name = "realtimestt", specifier = ">=0.1.7" },
-    { name = "scipy", specifier = ">=1.15.3" },
-    { name = "setuptools", specifier = ">=80.9.0,<81" },
-    { name = "silero-vad", specifier = ">=6.0.0" },
-    { name = "sounddevice", marker = "extra == 'full'", specifier = ">=0.4.6" },
-    { name = "sounddevice", marker = "extra == 'live'", specifier = ">=0.4.6" },
-    { name = "soundfile", marker = "extra == 'full'", specifier = ">=0.12.1" },
-    { name = "soundfile", marker = "extra == 'live'", specifier = ">=0.12.1" },
-    { name = "torch", specifier = ">=2.7.1" },
-    { name = "torchaudio", specifier = ">=2.7.1" },
-    { name = "torchaudio", marker = "extra == 'full'", specifier = ">=2.7.1" },
-    { name = "torchaudio", marker = "extra == 'vad-silero'", specifier = ">=2.7.1" },
-    { name = "torchvision", specifier = ">=0.22.1" },
-    { name = "transformers", specifier = ">=4.53.2" },
-    { name = "transformers", marker = "extra == 'dev'", specifier = ">=4.53.2" },
-    { name = "transformers", marker = "extra == 'full'", specifier = ">=4.53.2" },
-    { name = "watchdog", marker = "extra == 'full'", specifier = ">=4.0.0" },
-    { name = "watchdog", marker = "extra == 'watch'", specifier = ">=4.0.0" },
-    { name = "wheel", specifier = ">=0.45.1" },
-]
-provides-extras = ["dev", "live", "watch", "vad-silero", "vad-auditok", "test", "full"]
