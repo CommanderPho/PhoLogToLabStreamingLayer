@@ -6,3 +6,4 @@ flutter_version/xdf_files/*.xdf
 .specstory
 desktop.ini
 .venv.7z
+.cursor/debug.log
