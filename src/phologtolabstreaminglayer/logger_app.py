@@ -16,7 +16,6 @@ import mne
 from pathlib import Path
 import pystray
 from PIL import Image, ImageDraw
-import socket
 import sys
 from phopylslhelper.general_helpers import unwrap_single_element_listlike_if_needed, readable_dt_str, from_readable_dt_str, localize_datetime_to_timezone, tz_UTC, tz_Eastern, _default_tz
 from phopylslhelper.easy_time_sync import EasyTimeSyncParsingMixin
@@ -27,8 +26,7 @@ from phologtolabstreaminglayer.features.global_hotkey import GlobalHotkeyMixin
 from phologtolabstreaminglayer.features.recording_indicator_icon import RecordingIndicatorIconMixin
 
 # program_lock_port = int(os.environ.get("LIVE_WHISPER_LOCK_PORT", 13372))
-
-program_lock_port = int(os.environ.get("PHO_LOGTOLABSTREAMINGLAYER_LOCK_PORT", 13379))
+# program_lock_port = int(os.environ.get("PHO_LOGTOLABSTREAMINGLAYER_LOCK_PORT", 13379))  # No longer needed - using file-based locking
 
 
 _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
@@ -38,10 +36,9 @@ _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLog
 class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, SystemTrayAppMixin, SingletonInstanceMixin, LiveWhisperTranscriptionAppMixin, EasyTimeSyncParsingMixin):
     # Class variable to track if an instance is already running
     # _SingletonInstanceMixin_env_lock_port_variable_name: str = "LIVE_WHISPER_LOCK_PORT"
-    _SingletonInstanceMixin_env_lock_port_variable_name: str = "PHO_LOGTOLABSTREAMINGLAYER_LOCK_PORT"
+    _SingletonInstanceMixin_env_lock_file_name: str = "PHO_LOGTOLABSTREAMINGLAYER_LOCK_FILE"
 
     # _instance_running = False
-    _lock_port = deepcopy(program_lock_port)  # Port to use for singleton check
 
     # _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
     xdf_folder: Path = None # Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer

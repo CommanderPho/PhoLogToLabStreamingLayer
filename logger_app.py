@@ -1,4 +1,3 @@
-import socket
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 import sys
