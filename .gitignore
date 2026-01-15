@@ -7,3 +7,4 @@ flutter_version/xdf_files/*.xdf
 desktop.ini
 .venv.7z
 .cursor/debug.log
+.env
