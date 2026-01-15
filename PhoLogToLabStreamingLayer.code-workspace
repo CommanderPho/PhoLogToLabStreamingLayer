@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "../whisper-timestamped"
+		},
+		{
+			"path": "../uv-deps-switcher"
 		}
 	],
 	"settings": {

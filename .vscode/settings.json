@@ -1,4 +1,9 @@
 {
-    "cmake.ignoreCMakeListsMissing": true,
-    "python.languageServer": "None"
+  "cmake.ignoreCMakeListsMissing": true,
+  "python.languageServer": "None",
+  "files.exclude": {
+    "**/.specstory": true,
+    "**/.kiro": true,
+    "**/.mypy_cache": true
+  }
 }
