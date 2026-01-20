@@ -6,11 +6,6 @@ from pathlib import Path
 from phologtolabstreaminglayer.logger_app import LoggerApp
 from phopylslhelper.mixins.app_helpers import SingletonInstanceMixin
 
-parser = argparse.ArgumentParser(description='PhoLogToLabStreamingLayer')
-parser.add_argument('--unsafe', action='store_true', help='Override safety checks and allow multiple instances')
-args = parser.parse_args()
-unsafe = args.unsafe
-
 def main(xdf_folder: Path, unsafe: bool = False):
     """ 
         unsafe: bool = False skips the singleton lock check on startup, the user should first confirmt that there aren't multiple instances running.
@@ -49,11 +44,20 @@ def main(xdf_folder: Path, unsafe: bool = False):
     root.mainloop()
 
 
-
-if __name__ == "__main__":
+def console_main():
+    """Console script entry point for uv run logger_app"""
+    parser = argparse.ArgumentParser(description='PhoLogToLabStreamingLayer')
+    parser.add_argument('--unsafe', action='store_true', help='Override safety checks and allow multiple instances')
+    args = parser.parse_args()
+    unsafe = args.unsafe
+    
     _default_xdf_folder = Path(r'E:\Dropbox (Personal)\Databases\UnparsedData\PhoLogToLabStreamingLayer_logs').resolve()
     # _default_xdf_folder = Path('/media/halechr/MAX/cloud/University of Michigan Dropbox/Pho Hale/Personal/LabRecordedTextLog').resolve() ## Lab computer
     # LoggerApp._default_xdf_folder = _default_xdf_folder
     # assert _default_xdf_folder.exists(), f"XDF folder does not exist: {_default_xdf_folder}"
     main(xdf_folder=_default_xdf_folder, unsafe=unsafe)
+
+
+if __name__ == "__main__":
+    console_main()
 
