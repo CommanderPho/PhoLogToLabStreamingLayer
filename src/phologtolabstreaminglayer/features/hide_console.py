@@ -12,11 +12,50 @@ On macOS and Linux, GUI apps don't typically spawn a console window, so this is 
 
 import sys
 import os
+import io
+
+
+# Module-level state to track if console was hidden
+_console_hidden = False
+_original_stdout = None
+_original_stderr = None
+
+
+class NullWriter:
+    """A null writer that discards all output to prevent hangs when console is hidden."""
+    def write(self, text: str) -> int:
+        return len(text) if text else 0
+    
+    def flush(self):
+        pass
+    
+    def isatty(self) -> bool:
+        return False
+    
+    def readable(self) -> bool:
+        return False
+    
+    def writable(self) -> bool:
+        return True
+    
+    def seekable(self) -> bool:
+        return False
+    
+    @property
+    def encoding(self) -> str:
+        return 'utf-8'
+    
+    @property
+    def errors(self) -> str:
+        return 'replace'
 
 
 def hide_console_window() -> bool:
     """
     Hide the console window on Windows. No-op on other platforms.
+    
+    After hiding, redirects stdout/stderr to safe null writers to prevent hangs
+    when code tries to print before ConsoleOutputFrame is ready.
     
     Returns:
         True if the console was successfully hidden or if running on non-Windows platform.
@@ -26,9 +65,17 @@ def hide_console_window() -> bool:
         This should be called early in the application startup, before creating the main window.
         The console window may briefly flash before being hidden.
     """
+    global _console_hidden, _original_stdout, _original_stderr
+    
     if sys.platform != 'win32':
         # No console window to hide on macOS/Linux GUI apps
         return True
+    
+    # Store original streams before hiding
+    if _original_stdout is None:
+        _original_stdout = sys.stdout
+    if _original_stderr is None:
+        _original_stderr = sys.stderr
     
     try:
         import ctypes
@@ -43,6 +90,10 @@ def hide_console_window() -> bool:
         if console_window:
             # SW_HIDE = 0 - Hides the window
             user32.ShowWindow(console_window, 0)
+            # Redirect to safe streams to prevent hangs
+            sys.stdout = NullWriter()
+            sys.stderr = NullWriter()
+            _console_hidden = True
             return True
         else:
             # No console window exists (e.g., running from pythonw.exe or frozen app)
@@ -53,12 +104,21 @@ def hide_console_window() -> bool:
         try:
             import ctypes
             ctypes.windll.kernel32.FreeConsole()
+            # After FreeConsole, stdout/stderr become invalid - redirect to safe streams
+            sys.stdout = NullWriter()
+            sys.stderr = NullWriter()
+            _console_hidden = True
             return True
         except Exception:
             pass
         
         # If all methods fail, log the error but don't crash
-        print(f"Warning: Could not hide console window: {e}", file=sys.__stderr__ if sys.__stderr__ else sys.stderr)
+        # Use sys.__stderr__ to bypass any redirection
+        try:
+            if sys.__stderr__:
+                print(f"Warning: Could not hide console window: {e}", file=sys.__stderr__)
+        except Exception:
+            pass  # Even __stderr__ might be unavailable
         return False
 
 
@@ -111,3 +171,33 @@ def auto_hide_console() -> bool:
     if should_hide_console():
         return hide_console_window()
     return True
+
+
+def is_console_hidden() -> bool:
+    """
+    Check if the console window was hidden by this module.
+    
+    Returns:
+        True if console was hidden, False otherwise.
+    """
+    return _console_hidden
+
+
+def get_original_stdout():
+    """
+    Get the original stdout stream before console was hidden.
+    
+    Returns:
+        Original stdout stream, or None if console was not hidden.
+    """
+    return _original_stdout
+
+
+def get_original_stderr():
+    """
+    Get the original stderr stream before console was hidden.
+    
+    Returns:
+        Original stderr stream, or None if console was not hidden.
+    """
+    return _original_stderr

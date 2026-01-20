@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = "==3.10.*"
 resolution-markers = [
     "platform_machine == 'x86_64' and sys_platform == 'darwin'",
@@ -1092,7 +1092,7 @@ wheels = [
 [[package]]
 name = "openai-whisper"
 version = "20250625"
-source = { git = "https://github.com/openai/whisper.git#c0d2f624c09dc18e709e37c2ad90c039a4eb72a2" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "more-itertools" },
     { name = "numba" },
@@ -1102,6 +1102,7 @@ dependencies = [
     { name = "tqdm" },
     { name = "triton", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux') or sys_platform == 'linux2'" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/35/8e/d36f8880bcf18ec026a55807d02fe4c7357da9f25aebd92f85178000c0dc/openai_whisper-20250625.tar.gz", hash = "sha256:37a91a3921809d9f44748ffc73c0a55c9f366c85a3ef5c2ae0cc09540432eb96", size = 803191, upload-time = "2025-06-26T01:06:13.34Z" }
 
 [[package]]
 name = "packaging"
@@ -1188,7 +1189,6 @@ dependencies = [
     { name = "mne" },
     { name = "mne-lsl" },
     { name = "phopylslhelper" },
-    { name = "phopyqthelper" },
     { name = "pillow" },
     { name = "psutil" },
     { name = "pyinstaller" },
@@ -1226,7 +1226,6 @@ requires-dist = [
     { name = "mne", specifier = ">=1.8.0" },
     { name = "mne-lsl", specifier = ">=1.6.1" },
     { name = "phopylslhelper", editable = "../PhoPyLSLhelper" },
-    { name = "phopyqthelper", editable = "../phopyqthelper" },
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "psutil", specifier = ">=7.1.1" },
     { name = "pyinstaller", specifier = ">=6.14.2" },
@@ -1266,17 +1265,6 @@ requires-dist = [
     { name = "pylsl", specifier = ">=1.16.2" },
     { name = "pytz", specifier = ">=2025.2" },
 ]
-
-[[package]]
-name = "phopyqthelper"
-version = "0.1.0"
-source = { editable = "../phopyqthelper" }
-dependencies = [
-    { name = "qtpy" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "qtpy", specifier = ">=2.0.0" }]
 
 [[package]]
 name = "pillow"
@@ -4518,6 +4506,7 @@ name = "triton"
 version = "3.5.1"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
+    { url = "https://files.pythonhosted.org/packages/d9/2e/f95e673222afa2c7f0c687d8913e98fcf2589ef0b1405de76894e37fe18f/triton-3.5.1-cp310-cp310-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f63e34dcb32d7bd3a1d0195f60f30d2aee8b08a69a0424189b71017e23dfc3d2", size = 159821655, upload-time = "2025-11-11T17:51:44.09Z" },
     { url = "https://files.pythonhosted.org/packages/fd/6e/676ab5019b4dde8b9b7bab71245102fc02778ef3df48218b298686b9ffd6/triton-3.5.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:5fc53d849f879911ea13f4a877243afc513187bc7ee92d1f2c0f1ba3169e3c94", size = 170320692, upload-time = "2025-11-11T17:40:46.074Z" },
 ]
 
@@ -4630,7 +4619,7 @@ requires-dist = [
     { name = "onnxruntime", specifier = ">=1.22.1,<1.23" },
     { name = "onnxruntime", marker = "extra == 'full'", specifier = ">=1.22.1,<1.23" },
     { name = "onnxruntime", marker = "extra == 'vad-silero'", specifier = ">=1.22.1,<1.23" },
-    { name = "openai-whisper", git = "https://github.com/openai/whisper.git" },
+    { name = "openai-whisper" },
     { name = "pandas", specifier = ">=2.3.1" },
     { name = "phopylslhelper", editable = "../PhoPyLSLhelper" },
     { name = "pyautogui", specifier = ">=0.9.54" },

@@ -17,6 +17,18 @@ from typing import Optional, Callable, TextIO
 import threading
 import queue
 
+# Try to import hide_console to check if console was hidden
+try:
+    from phologtolabstreaminglayer.features.hide_console import is_console_hidden, get_original_stdout, get_original_stderr
+except ImportError:
+    # Fallback if module not available
+    def is_console_hidden() -> bool:
+        return False
+    def get_original_stdout() -> Optional[TextIO]:
+        return None
+    def get_original_stderr() -> Optional[TextIO]:
+        return None
+
 
 class TkTextStream:
     """A thread-safe text stream that captures writes and forwards them to a callback.
@@ -28,7 +40,7 @@ class TkTextStream:
         source: The source identifier for this stream ("stdout" or "stderr").
     """
     
-    def __init__(self, original_stream: Optional[TextIO], source: str = "stdout", write_callback: Optional[Callable[[str, str], None]] = None):
+    def __init__(self, original_stream: Optional[TextIO], source: str = "stdout", write_callback: Optional[Callable[[str, str], None]] = None, pass_through: bool = True):
         """
         Initialize the text stream wrapper.
         
@@ -36,10 +48,13 @@ class TkTextStream:
             original_stream: The original stream to pass output through to (can be None).
             source: Source identifier ("stdout", "stderr", or custom).
             write_callback: Optional callback function called on every write with (text, source).
+            pass_through: Whether to pass output through to original_stream. Defaults to True.
+                          Set to False when console was hidden to avoid hangs.
         """
         self._original_stream = original_stream
         self._source = source
         self._write_callback = write_callback
+        self._pass_through = pass_through
         self._buffer = ""
         self._lock = threading.Lock()
 
@@ -61,8 +76,8 @@ class TkTextStream:
         if not text:
             return 0
         
-        # Pass through to original stream first
-        if self._original_stream is not None:
+        # Pass through to original stream first (if enabled)
+        if self._pass_through and self._original_stream is not None:
             try:
                 self._original_stream.write(text)
             except Exception:
@@ -83,7 +98,7 @@ class TkTextStream:
 
     def flush(self):
         """Flush the stream."""
-        if self._original_stream is not None:
+        if self._pass_through and self._original_stream is not None:
             try:
                 self._original_stream.flush()
             except Exception:
@@ -144,9 +159,11 @@ class ConsoleOutputFrame(ttk.Frame):
         max_lines: Maximum number of lines to retain. Defaults to 10000.
         initial_visible: Whether the console panel is initially visible. Defaults to False.
         height: Height of the text area in lines. Defaults to 10.
+        pass_through: Whether to pass output through to original streams. Defaults to None (auto-detect).
+                      If None, automatically detects if console was hidden and disables passthrough.
     """
     
-    def __init__(self, parent, root: tk.Tk, capture_stdout: bool = True, capture_stderr: bool = True, max_lines: int = 10000, initial_visible: bool = False, height: int = 10):
+    def __init__(self, parent, root: tk.Tk, capture_stdout: bool = True, capture_stderr: bool = True, max_lines: int = 10000, initial_visible: bool = False, height: int = 10, pass_through: Optional[bool] = None):
         super().__init__(parent)
         
         self._root = root
@@ -156,9 +173,17 @@ class ConsoleOutputFrame(ttk.Frame):
         self._height = height
         self._shutting_down = False
         
-        # Store original streams
-        self._original_stdout = sys.stdout
-        self._original_stderr = sys.stderr
+        # Auto-detect pass_through if not specified
+        if pass_through is None:
+            # If console was hidden, don't pass through to avoid hangs
+            pass_through = not is_console_hidden()
+        self._pass_through = pass_through
+        
+        # Store original streams - prefer streams from hide_console if available
+        original_stdout = get_original_stdout()
+        original_stderr = get_original_stderr()
+        self._original_stdout = original_stdout if original_stdout is not None else sys.stdout
+        self._original_stderr = original_stderr if original_stderr is not None else sys.stderr
         self._stdout_stream: Optional[TkTextStream] = None
         self._stderr_stream: Optional[TkTextStream] = None
         self._capture_stdout = capture_stdout
@@ -225,11 +250,11 @@ class ConsoleOutputFrame(ttk.Frame):
     def _setup_streams(self):
         """Set up stdout/stderr redirection."""
         if self._capture_stdout:
-            self._stdout_stream = TkTextStream(self._original_stdout, source="stdout", write_callback=self._on_text_written)
+            self._stdout_stream = TkTextStream(self._original_stdout, source="stdout", write_callback=self._on_text_written, pass_through=self._pass_through)
             sys.stdout = self._stdout_stream
         
         if self._capture_stderr:
-            self._stderr_stream = TkTextStream(self._original_stderr, source="stderr", write_callback=self._on_text_written)
+            self._stderr_stream = TkTextStream(self._original_stderr, source="stderr", write_callback=self._on_text_written, pass_through=self._pass_through)
             sys.stderr = self._stderr_stream
 
 
@@ -366,7 +391,7 @@ class ConsoleOutputFrame(ttk.Frame):
         """
         # Handle stdout
         if stdout and not self._capture_stdout:
-            self._stdout_stream = TkTextStream(self._original_stdout, source="stdout", write_callback=self._on_text_written)
+            self._stdout_stream = TkTextStream(self._original_stdout, source="stdout", write_callback=self._on_text_written, pass_through=self._pass_through)
             sys.stdout = self._stdout_stream
             self._capture_stdout = True
         elif not stdout and self._capture_stdout:
@@ -377,7 +402,7 @@ class ConsoleOutputFrame(ttk.Frame):
         
         # Handle stderr
         if stderr and not self._capture_stderr:
-            self._stderr_stream = TkTextStream(self._original_stderr, source="stderr", write_callback=self._on_text_written)
+            self._stderr_stream = TkTextStream(self._original_stderr, source="stderr", write_callback=self._on_text_written, pass_through=self._pass_through)
             sys.stderr = self._stderr_stream
             self._capture_stderr = True
         elif not stderr and self._capture_stderr:
