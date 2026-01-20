@@ -24,6 +24,7 @@ from whisper_timestamped.mixins.live_whisper_transcription import LiveWhisperTra
 from labrecorder import LabRecorder
 from phologtolabstreaminglayer.features.global_hotkey import GlobalHotkeyMixin
 from phologtolabstreaminglayer.features.recording_indicator_icon import RecordingIndicatorIconMixin
+from phologtolabstreaminglayer.features.console_output_tk import ConsoleOutputFrame
 
 # program_lock_port = int(os.environ.get("LIVE_WHISPER_LOCK_PORT", 13372))
 # program_lock_port = int(os.environ.get("PHO_LOGTOLABSTREAMINGLAYER_LOCK_PORT", 13379))  # No longer needed - using file-based locking
@@ -611,10 +612,11 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
     # Resume _____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________ #
     def setup_gui(self):
         """Create the GUI elements"""
-        # Configure root grid - two rows: notebook (top) and log display (bottom)
+        # Configure root grid - three rows: notebook (top), log display (middle), console output (bottom)
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)  # Notebook row
         self.root.rowconfigure(1, weight=1)  # Log display row
+        self.root.rowconfigure(2, weight=0)  # Console output row (collapsible, no weight)
 
         # Create tabbed notebook
         self.notebook = ttk.Notebook(self.root)
@@ -748,7 +750,13 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
 
         # Clear log button
         ttk.Button(log_bottom_frame, text="Clear Log Display", command=self.clear_log_display).grid(row=0, column=0, sticky=tk.W)
+        
+        # ------------------------- Console Output Panel (Collapsible) -------------------------
+        # Create collapsible console output frame for stdout/stderr capture
+        self.console_output_frame = ConsoleOutputFrame(self.root, root=self.root, capture_stdout=True, capture_stderr=True, max_lines=10000, initial_visible=False, height=8)
+        self.console_output_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=(0, 10))
     
+
     def setup_stream_monitor_gui(self, parent, row: int = 2):
         """Setup Stream Monitor GUI for displaying discovered LSL streams"""
         # Stream Monitor frame
@@ -2141,6 +2149,10 @@ class LoggerApp(RecordingIndicatorIconMixin, GlobalHotkeyMixin, AppThemeMixin, S
         
         # Clean up global hotkey
         self.cleanup_GlobalHotkeyMixin()
+        
+        # Restore stdout/stderr streams from console output capture
+        if hasattr(self, 'console_output_frame') and self.console_output_frame is not None:
+            self.console_output_frame.restore_streams()
         
         # Clean up system tray
         if self.system_tray:

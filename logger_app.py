@@ -4,6 +4,7 @@ import sys
 import argparse
 from pathlib import Path
 from phologtolabstreaminglayer.logger_app import LoggerApp
+from phologtolabstreaminglayer.features.hide_console import auto_hide_console
 from phopylslhelper.mixins.app_helpers import SingletonInstanceMixin
 
 def main(xdf_folder: Path, unsafe: bool = False):
@@ -46,6 +47,9 @@ def main(xdf_folder: Path, unsafe: bool = False):
 
 def console_main():
     """Console script entry point for uv run logger_app"""
+    # Hide the Windows console window (no-op on other platforms)
+    auto_hide_console()
+    
     parser = argparse.ArgumentParser(description='PhoLogToLabStreamingLayer')
     parser.add_argument('--unsafe', action='store_true', help='Override safety checks and allow multiple instances')
     args = parser.parse_args()
