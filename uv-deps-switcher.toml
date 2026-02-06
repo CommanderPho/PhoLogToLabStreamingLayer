@@ -1,0 +1,10 @@
+# Example configuration file for uv-deps-switcher
+# Copy this to .uv-deps-switcher.toml in your workspace root or home directory
+
+[groups.main]
+description = "Main development group"
+repos = ["PhoLogToLabStreamingLayer", "whisper-timestamped"]
+
+[groups.all]
+description = "All repos with templating"
+repos = ["PhoLogToLabStreamingLayer", "whisper-timestamped", "PhoPyLSLhelper"]

@@ -75,6 +75,26 @@ This enhanced version of the LSL Logger App includes system tray functionality a
 - `pyautogui`: Screen positioning
 - `pywin32`: Windows API access
 
+## Icons
+
+The application includes theme-aware icons located in the `icons/` folder:
+
+- **Dark theme icons** (default):
+  - `LogToLabStreamingLayerIcon.png` - Main application icon
+  - `LogToLabStreamingLayerIcon.ico` - Windows icon
+  - `LogToLabStreamingLayerIcon.icns` - macOS icon
+  - `LogToLabStreamingLayerIcon.svg` - Vector icon
+
+- **Light theme icons**:
+  - `LogToLabStreamingLayerIcon_Light.png` - Light theme application icon
+  - `LogToLabStreamingLayerIcon_Light.ico` - Light theme Windows icon
+  - `LogToLabStreamingLayerIcon_Light.icns` - Light theme macOS icon
+
+The application automatically detects your system theme and uses the appropriate icon:
+- **Windows**: Reads the registry to detect dark/light mode
+- **Other systems**: Uses a simple heuristic based on system colors
+- **Fallback**: Defaults to dark theme icons if detection fails
+
 ## Notes
 
 - The global hotkey `Ctrl+Alt+L` works system-wide
@@ -294,4 +314,29 @@ export PATH="$(brew --prefix tcl-tk)/bin:$PATH"
 pyenv uninstall 3.9.13
 pyenv install 3.9.13
 
+```
+
+
+## Output LabStreamingLayer Steams
+```python
+# 'TextLogger' -  User-Arbitrary timestampped messages
+  info = pylsl.StreamInfo(
+      name='TextLogger',
+      type='Markers',
+      channel_count=1,
+      nominal_srate=pylsl.IRREGULAR_RATE,
+      channel_format=pylsl.cf_string,
+      source_id='textlogger_001'
+  )
+
+## 'EventBoard' - specific events
+  info = pylsl.StreamInfo(
+      name='EventBoard',
+      type='Markers',
+      channel_count=1,
+      nominal_srate=pylsl.IRREGULAR_RATE,
+      channel_format=pylsl.cf_string,
+      source_id='eventboard_001'
+  )
+  
 ```

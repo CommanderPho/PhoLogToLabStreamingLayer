@@ -1,0 +1,4 @@
+[tool.uv.sources]
+lab-recorder-python = { git = "https://github.com/CommanderPho/lab-recorder-python.git"}
+whisper-timestamped = { git = "https://github.com/CommanderPho/whisper-timestamped.git"} 
+phopylslhelper = { git = "https://github.com/CommanderPho/phopylslhelper.git" }
