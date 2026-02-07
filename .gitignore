@@ -9,5 +9,3 @@ desktop.ini
 .cursor/debug.log
 .env
 templating/uv_deps_switcher/backups/pyproject.toml.bak
-.DS_Store
-.cursor/rules/derived-cursor-rules.mdc
